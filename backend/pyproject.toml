@@ -4,6 +4,31 @@ version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi[standard]>=0.139.2",
+    # Database
+    "sqlalchemy[asyncio]>=2.0.40",
+    "asyncpg>=0.30.0",
+    "alembic>=1.15.0",
+    # Auth & Security
+    "python-jose[cryptography]>=3.4.0",
+    "argon2-cffi>=24.2.0",
+    "python-multipart>=0.0.20",
+    # Config
+    "pydantic-settings>=2.8.0",
+    # File I/O
+    "aiofiles>=24.1.0",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=1.0.0",
+    "httpx>=0.28.0",
+    "aiosqlite>=0.21.0",
+]
+
 [tool.fastapi]
 entrypoint = "app.main:app"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
