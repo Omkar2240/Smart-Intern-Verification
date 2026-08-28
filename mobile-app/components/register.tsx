@@ -9,7 +9,6 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -43,8 +42,13 @@ export function Register({ onRegister, isLoading = false }: RegisterProps) {
       return;
     }
 
-    if (password.length < 8) {
-      setErrorMsg('Password must be at least 8 characters with uppercase, lowercase, digit, and special char.');
+    const hasUpper = /[A-Z]/.test(password);
+    const hasLower = /[a-z]/.test(password);
+    const hasDigit = /\d/.test(password);
+    const hasSpecial = /[^A-Za-z0-9]/.test(password);
+
+    if (password.length < 8 || !hasUpper || !hasLower || !hasDigit || !hasSpecial) {
+      setErrorMsg('Password must be at least 8 characters and include uppercase, lowercase, a digit, and a special character.');
       return;
     }
 

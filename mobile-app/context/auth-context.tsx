@@ -33,7 +33,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const status = await api.getAuthStatus();
         if (status.authenticated && status.user) {
-          setUser(status.user);
+          // Hydrate full user details (/api/v1/users/me) so registration/mobile numbers are populated
+          try {
+            const me = await api.getMe();
+            setUser(me);
+            const refreshToken = await storage.getRefreshToken();
+            if (token && refreshToken) {
+              await storage.saveAuthData(token, refreshToken, me);
+            }
+          } catch {
+            setUser(status.user);
+          }
           return true;
         } else {
           await storage.clearAuthData();
@@ -63,7 +73,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       const response = await api.login(data);
-      setUser(response.user);
+      // Hydrate full user record (/api/v1/users/me)
+      try {
+        const me = await api.getMe();
+        setUser(me);
+        await storage.saveAuthData(response.access_token, response.refresh_token, me);
+      } catch {
+        setUser(response.user);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -73,7 +90,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       const response = await api.register(data);
-      setUser(response.user);
+      // Hydrate full user record (/api/v1/users/me)
+      try {
+        const me = await api.getMe();
+        setUser(me);
+        await storage.saveAuthData(response.access_token, response.refresh_token, me);
+      } catch {
+        setUser(response.user);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -93,6 +117,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const me = await api.getMe();
       setUser(me);
+      const token = await storage.getAccessToken();
+      const refreshToken = await storage.getRefreshToken();
+      if (token && refreshToken) {
+        await storage.saveAuthData(token, refreshToken, me);
+      }
     } catch (e) {
       console.warn('Failed to refresh user:', e);
     }

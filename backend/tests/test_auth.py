@@ -142,6 +142,19 @@ async def test_invalid_jwt(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_jwt_invalid_uuid_sub(client: AsyncClient):
+    from jose import jwt
+    from app.core.config import settings
+    token = jwt.encode({"sub": "not-a-valid-uuid", "type": "access"}, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    resp = await client.get(
+        "/api/v1/users/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 401
+    assert "invalid token payload" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
 async def test_no_auth_header(client: AsyncClient):
     resp = await client.get("/api/v1/users/me")
     assert resp.status_code == 401

@@ -1,3 +1,15 @@
+/**
+ * Auth Storage Service
+ *
+ * Security Design:
+ * - Native (iOS / Android): Uses `expo-secure-store` which stores tokens in the
+ *   hardware-backed iOS Keychain and Android KeyStore / EncryptedSharedPreferences.
+ * - Web: Uses `sessionStorage` (scoped to browser tab) instead of persistent localStorage
+ *   to mitigate cross-tab token scraping and persistent XSS risks.
+ * - Note: For dedicated standalone web production apps, httpOnly SameSite cookies
+ *   are recommended when deploying to web domains.
+ */
+
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
@@ -5,14 +17,19 @@ const ACCESS_TOKEN_KEY = 'trackintern_access_token';
 const REFRESH_TOKEN_KEY = 'trackintern_refresh_token';
 const USER_KEY = 'trackintern_user';
 
+const getWebStorage = (): Storage | null => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return window.sessionStorage || window.localStorage;
+  }
+  return null;
+};
+
 export const storage = {
   async getAccessToken(): Promise<string | null> {
     try {
-      if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined') {
-          return localStorage.getItem(ACCESS_TOKEN_KEY);
-        }
-        return null;
+      const webStore = getWebStorage();
+      if (webStore) {
+        return webStore.getItem(ACCESS_TOKEN_KEY);
       }
       return await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
     } catch {
@@ -22,10 +39,9 @@ export const storage = {
 
   async setAccessToken(token: string): Promise<void> {
     try {
-      if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(ACCESS_TOKEN_KEY, token);
-        }
+      const webStore = getWebStorage();
+      if (webStore) {
+        webStore.setItem(ACCESS_TOKEN_KEY, token);
         return;
       }
       await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, token);
@@ -36,11 +52,9 @@ export const storage = {
 
   async getRefreshToken(): Promise<string | null> {
     try {
-      if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined') {
-          return localStorage.getItem(REFRESH_TOKEN_KEY);
-        }
-        return null;
+      const webStore = getWebStorage();
+      if (webStore) {
+        return webStore.getItem(REFRESH_TOKEN_KEY);
       }
       return await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
     } catch {
@@ -50,10 +64,9 @@ export const storage = {
 
   async setRefreshToken(token: string): Promise<void> {
     try {
-      if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(REFRESH_TOKEN_KEY, token);
-        }
+      const webStore = getWebStorage();
+      if (webStore) {
+        webStore.setItem(REFRESH_TOKEN_KEY, token);
         return;
       }
       await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, token);
@@ -67,10 +80,9 @@ export const storage = {
     await this.setRefreshToken(refreshToken);
     if (user) {
       const userStr = JSON.stringify(user);
-      if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(USER_KEY, userStr);
-        }
+      const webStore = getWebStorage();
+      if (webStore) {
+        webStore.setItem(USER_KEY, userStr);
       } else {
         await SecureStore.setItemAsync(USER_KEY, userStr);
       }
@@ -79,11 +91,10 @@ export const storage = {
 
   async getStoredUser(): Promise<any | null> {
     try {
+      const webStore = getWebStorage();
       let userStr: string | null = null;
-      if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined') {
-          userStr = localStorage.getItem(USER_KEY);
-        }
+      if (webStore) {
+        userStr = webStore.getItem(USER_KEY);
       } else {
         userStr = await SecureStore.getItemAsync(USER_KEY);
       }
@@ -95,12 +106,11 @@ export const storage = {
 
   async clearAuthData(): Promise<void> {
     try {
-      if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem(ACCESS_TOKEN_KEY);
-          localStorage.removeItem(REFRESH_TOKEN_KEY);
-          localStorage.removeItem(USER_KEY);
-        }
+      const webStore = getWebStorage();
+      if (webStore) {
+        webStore.removeItem(ACCESS_TOKEN_KEY);
+        webStore.removeItem(REFRESH_TOKEN_KEY);
+        webStore.removeItem(USER_KEY);
         return;
       }
       await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);

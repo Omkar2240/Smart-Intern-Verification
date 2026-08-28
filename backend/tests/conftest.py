@@ -9,6 +9,7 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
 from app.db.session import get_db
@@ -30,7 +31,12 @@ def event_loop():
 
 @pytest_asyncio.fixture(scope="session")
 async def engine():
-    _engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+    _engine = create_async_engine(
+        TEST_DATABASE_URL,
+        echo=False,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield _engine
@@ -49,8 +55,10 @@ async def db_session(engine) -> AsyncGenerator[AsyncSession, None]:
     )
     async with async_session() as session:
         async with session.begin():
-            yield session
-            await session.rollback()
+            try:
+                yield session
+            finally:
+                await session.rollback()
 
 
 @pytest_asyncio.fixture
