@@ -4,22 +4,20 @@ import { storage } from './storage';
 
 // Smart API Base URL resolver:
 // 1. Explicit EXPO_PUBLIC_API_URL (if provided)
-// 2. Metro host IP when running via Expo Go / dev client over Wi-Fi
-// 3. Default to localhost:8000 (works on Web, iOS simulator, and physical Android devices with `adb reverse tcp:8000 tcp:8000`)
+// 2. Android: 10.0.2.2:8000 (routes directly from Android emulator to host machine localhost:8000)
+// 3. Web & iOS Simulator: localhost:8000
 const getBaseUrl = (): string => {
   if (process.env.EXPO_PUBLIC_API_URL) {
+    console.log('[API] Using EXPO_PUBLIC_API_URL:', process.env.EXPO_PUBLIC_API_URL);
     return process.env.EXPO_PUBLIC_API_URL;
   }
 
-  // If running via Expo Go, resolve the computer's LAN IP from Metro packager
-  const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest2?.extra?.expoClient?.hostUri;
-  if (hostUri) {
-    const hostIp = hostUri.split(':')[0];
-    if (hostIp && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
-      return `http://${hostIp}:8000`;
-    }
+  if (Platform.OS === 'android') {
+    console.log('[API] Android detected -> using http://10.0.2.2:8000');
+    return 'http://10.0.2.2:8000';
   }
 
+  console.log('[API] Web/iOS detected -> using http://localhost:8000');
   return 'http://localhost:8000';
 };
 
@@ -134,8 +132,11 @@ class ApiService {
 
     let response: Response;
     try {
+      console.log(`[API REQUEST] ${options.method || 'GET'} ${url}`);
       response = await this.fetchWithTimeout(url, config);
+      console.log(`[API RESPONSE] ${response.status} ${url}`);
     } catch (e: any) {
+      console.error(`[API NETWORK ERROR] ${url}:`, e?.message || e);
       throw new Error(e.message || 'Cannot reach server');
     }
 
