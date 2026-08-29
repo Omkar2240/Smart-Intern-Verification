@@ -4,22 +4,32 @@ import { storage } from './storage';
 
 // Smart API Base URL resolver:
 // 1. Explicit EXPO_PUBLIC_API_URL (if provided)
-// 2. Metro host IP when running via Expo Go / dev client over Wi-Fi
-// 3. Default to localhost:8000 (works on Web, iOS simulator, and physical Android devices with `adb reverse tcp:8000 tcp:8000`)
+// 2. Metro host LAN IP when running via Expo Go on physical devices over Wi-Fi
+// 3. Android Emulator fallback (10.0.2.2 maps to host machine localhost:8000)
+// 4. Web & iOS Simulator: localhost:8000
 const getBaseUrl = (): string => {
   if (process.env.EXPO_PUBLIC_API_URL) {
+    if (__DEV__) console.log('[API] Using EXPO_PUBLIC_API_URL:', process.env.EXPO_PUBLIC_API_URL);
     return process.env.EXPO_PUBLIC_API_URL;
   }
 
-  // If running via Expo Go, resolve the computer's LAN IP from Metro packager
+  // If running via Expo Go on a physical device over LAN, resolve host machine IP
   const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest2?.extra?.expoClient?.hostUri;
   if (hostUri) {
     const hostIp = hostUri.split(':')[0];
     if (hostIp && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
+      if (__DEV__) console.log(`[API] Metro host IP detected -> using http://${hostIp}:8000`);
       return `http://${hostIp}:8000`;
     }
   }
 
+  // Android emulator loopback alias to host machine
+  if (Platform.OS === 'android') {
+    if (__DEV__) console.log('[API] Android detected -> using http://10.0.2.2:8000');
+    return 'http://10.0.2.2:8000';
+  }
+
+  if (__DEV__) console.log('[API] Web/iOS detected -> using http://localhost:8000');
   return 'http://localhost:8000';
 };
 
@@ -134,8 +144,11 @@ class ApiService {
 
     let response: Response;
     try {
+      if (__DEV__) console.log(`[API REQUEST] ${options.method || 'GET'} ${url}`);
       response = await this.fetchWithTimeout(url, config);
+      if (__DEV__) console.log(`[API RESPONSE] ${response.status} ${url}`);
     } catch (e: any) {
+      if (__DEV__) console.error(`[API NETWORK ERROR] ${url}:`, e?.message || e);
       throw new Error(e.message || 'Cannot reach server');
     }
 
