@@ -10,7 +10,6 @@ import {
   Modal,
   TextInput,
   RefreshControl,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -212,8 +211,14 @@ export default function HomeScreen() {
             activeOpacity={0.8}
             onPress={() => Alert.alert('Notifications', 'No unread attendance alerts.')}
           >
-            <Ionicons name="notifications-outline" size={20} color="#FFFFFF" />
-            <View style={styles.notificationDot} />
+            {loading ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Ionicons name="notifications-outline" size={20} color="#FFFFFF" />
+                <View style={styles.notificationDot} />
+              </>
+            )}
           </TouchableOpacity>
         </View>
 

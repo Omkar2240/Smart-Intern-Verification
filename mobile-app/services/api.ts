@@ -4,20 +4,32 @@ import { storage } from './storage';
 
 // Smart API Base URL resolver:
 // 1. Explicit EXPO_PUBLIC_API_URL (if provided)
-// 2. Android: 10.0.2.2:8000 (routes directly from Android emulator to host machine localhost:8000)
-// 3. Web & iOS Simulator: localhost:8000
+// 2. Metro host LAN IP when running via Expo Go on physical devices over Wi-Fi
+// 3. Android Emulator fallback (10.0.2.2 maps to host machine localhost:8000)
+// 4. Web & iOS Simulator: localhost:8000
 const getBaseUrl = (): string => {
   if (process.env.EXPO_PUBLIC_API_URL) {
-    console.log('[API] Using EXPO_PUBLIC_API_URL:', process.env.EXPO_PUBLIC_API_URL);
+    if (__DEV__) console.log('[API] Using EXPO_PUBLIC_API_URL:', process.env.EXPO_PUBLIC_API_URL);
     return process.env.EXPO_PUBLIC_API_URL;
   }
 
+  // If running via Expo Go on a physical device over LAN, resolve host machine IP
+  const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest2?.extra?.expoClient?.hostUri;
+  if (hostUri) {
+    const hostIp = hostUri.split(':')[0];
+    if (hostIp && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
+      if (__DEV__) console.log(`[API] Metro host IP detected -> using http://${hostIp}:8000`);
+      return `http://${hostIp}:8000`;
+    }
+  }
+
+  // Android emulator loopback alias to host machine
   if (Platform.OS === 'android') {
-    console.log('[API] Android detected -> using http://10.0.2.2:8000');
+    if (__DEV__) console.log('[API] Android detected -> using http://10.0.2.2:8000');
     return 'http://10.0.2.2:8000';
   }
 
-  console.log('[API] Web/iOS detected -> using http://localhost:8000');
+  if (__DEV__) console.log('[API] Web/iOS detected -> using http://localhost:8000');
   return 'http://localhost:8000';
 };
 
@@ -132,11 +144,11 @@ class ApiService {
 
     let response: Response;
     try {
-      console.log(`[API REQUEST] ${options.method || 'GET'} ${url}`);
+      if (__DEV__) console.log(`[API REQUEST] ${options.method || 'GET'} ${url}`);
       response = await this.fetchWithTimeout(url, config);
-      console.log(`[API RESPONSE] ${response.status} ${url}`);
+      if (__DEV__) console.log(`[API RESPONSE] ${response.status} ${url}`);
     } catch (e: any) {
-      console.error(`[API NETWORK ERROR] ${url}:`, e?.message || e);
+      if (__DEV__) console.error(`[API NETWORK ERROR] ${url}:`, e?.message || e);
       throw new Error(e.message || 'Cannot reach server');
     }
 
