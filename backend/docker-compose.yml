@@ -1,6 +1,7 @@
 services:
   db:
     image: postgres:16-alpine
+    container_name: trackintern-db
     restart: unless-stopped
     environment:
       POSTGRES_DB: trackintern
@@ -11,10 +12,38 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d trackintern"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trackintern-api
+    working_dir: /app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/trackintern
+      SECRET_KEY: change-me-to-a-random-secret-key
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+      REFRESH_TOKEN_EXPIRE_DAYS: "7"
+      CORS_ORIGINS: "*"
+      UPLOAD_DIR: ./uploads
+      MAX_UPLOAD_SIZE_MB: "10"
+      EMAIL_ENABLED: "false"
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    command: >
+      sh -c "uv sync --all-extras && uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    restart: unless-stopped
 
 volumes:
   pgdata:

@@ -20,6 +20,42 @@ FastAPI backend for the TrackIntern mobile internship attendance and verificatio
 docker compose up -d
 ```
 
+### Stop the database/container
+
+```bash
+docker compose down
+```
+
+To remove database volume as well (fresh start):
+
+```bash
+docker compose down -v
+```
+
+### Connect to the PostgreSQL database
+
+```bash
+docker compose exec db psql -U postgres -d trackintern
+```
+
+Useful database commands inside psql:
+
+```sql
+\dt
+SELECT * FROM users;
+SELECT * FROM refresh_tokens;
+SELECT * FROM student_profiles;
+SELECT * FROM verification_tokens;
+```
+
+### Quick user data query
+
+To quickly view user data without entering the psql shell:
+
+```bash
+docker compose exec db psql -U postgres -d trackintern -c "SELECT id, name, email, registration_number, mobile_number, is_active, is_verified, created_at FROM users;"
+```
+
 ### 2. Install dependencies
 
 ```bash
@@ -51,28 +87,28 @@ The API is available at `http://localhost:8000` and Swagger docs at `http://loca
 
 ### Authentication (`/api/v1/auth`)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/status` | Check authentication status |
-| `POST` | `/register` | Register a new user |
-| `POST` | `/login` | Login with email/password |
-| `POST` | `/refresh` | Rotate refresh token |
-| `POST` | `/logout` | Revoke a refresh token |
-| `POST` | `/logout-all` | Revoke all sessions |
-| `POST` | `/verify-email` | Verify email with token |
-| `POST` | `/resend-verification` | Resend verification email |
-| `POST` | `/forgot-password` | Request password reset |
-| `POST` | `/reset-password` | Reset password with token |
+| Method | Endpoint               | Description                 |
+| ------ | ---------------------- | --------------------------- |
+| `GET`  | `/status`              | Check authentication status |
+| `POST` | `/register`            | Register a new user         |
+| `POST` | `/login`               | Login with email/password   |
+| `POST` | `/refresh`             | Rotate refresh token        |
+| `POST` | `/logout`              | Revoke a refresh token      |
+| `POST` | `/logout-all`          | Revoke all sessions         |
+| `POST` | `/verify-email`        | Verify email with token     |
+| `POST` | `/resend-verification` | Resend verification email   |
+| `POST` | `/forgot-password`     | Request password reset      |
+| `POST` | `/reset-password`      | Reset password with token   |
 
 ### Users (`/api/v1/users`)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/me` | Get current user |
-| `GET` | `/me/profile` | Get student profile |
-| `POST` | `/me/profile` | Create student profile |
-| `PATCH` | `/me/profile` | Update student profile |
-| `POST` | `/me/profile/college-id` | Upload college ID document |
+| Method  | Endpoint                 | Description                |
+| ------- | ------------------------ | -------------------------- |
+| `GET`   | `/me`                    | Get current user           |
+| `GET`   | `/me/profile`            | Get student profile        |
+| `POST`  | `/me/profile`            | Create student profile     |
+| `PATCH` | `/me/profile`            | Update student profile     |
+| `POST`  | `/me/profile/college-id` | Upload college ID document |
 
 ## Running Tests
 
