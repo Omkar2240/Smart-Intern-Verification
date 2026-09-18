@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: trackintern-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    region: oregon
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        sync: false          # You will fill this in the Render dashboard
+      - key: SECRET_KEY
+        generateValue: true  # Render auto-generates a secure random value
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "30"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "7"
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: EMAIL_ENABLED
+        value: "false"
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "10"
