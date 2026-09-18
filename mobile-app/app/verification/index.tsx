@@ -47,7 +47,7 @@ export default function VerificationHubScreen() {
         router.push('/verification/college' as any);
         break;
       case 'college_id':
-        router.push('/verification/college-id' as any);
+        router.push('/verification/college_id' as any);
         break;
       case 'face':
         router.push('/verification/face' as any);
@@ -181,7 +181,7 @@ export default function VerificationHubScreen() {
             ]}
             onPress={() => {
               if (currentStepNum >= 2) {
-                router.push('/verification/college-id' as any);
+                router.push('/verification/college_id' as any);
               } else {
                 Alert.alert('Step 1 Required', 'Please select your college first.');
               }

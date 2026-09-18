@@ -57,7 +57,7 @@ export default function CollegeSelectionScreen() {
     try {
       await api.selectCollege(selectedCollegeId);
       await refreshVerificationStatus();
-      router.push('/verification/college-id' as any);
+      router.push('/verification/college_id' as any);
     } catch (e: any) {
       Alert.alert('Selection Failed', e.message || 'Unable to save college selection');
     } finally {

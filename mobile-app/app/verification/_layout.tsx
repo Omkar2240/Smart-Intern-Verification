@@ -10,6 +10,7 @@ export default function VerificationLayout() {
     >
       <Stack.Screen name="index" />
       <Stack.Screen name="college" />
+      <Stack.Screen name="college_id" />
       <Stack.Screen name="college-id" />
       <Stack.Screen name="face" />
       <Stack.Screen name="complete" />
