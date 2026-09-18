@@ -2,13 +2,14 @@ services:
   - type: web
     name: trackintern-backend
     runtime: docker
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     region: oregon
     plan: free
     envVars:
       - key: DATABASE_URL
-        sync: false          # You will fill this in the Render dashboard
+        sync: false          # Fill this in the Render dashboard with your Neon URL
       - key: SECRET_KEY
         generateValue: true  # Render auto-generates a secure random value
       - key: JWT_ALGORITHM
