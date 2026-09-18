@@ -2,6 +2,9 @@
 Application settings loaded from environment variables / .env file.
 """
 
+import re
+
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +18,30 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/trackintern"
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def clean_db_url(cls, v: str) -> str:
+        """Fix URL prefix and strip libpq-only params that asyncpg rejects."""
+        # Fix scheme prefix
+        if v.startswith("postgres://"):
+            v = v.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif v.startswith("postgresql://") and "+asyncpg" not in v:
+            v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        # Strip params asyncpg doesn't understand
+        for param in ("sslmode", "channel_binding"):
+            v = re.sub(rf"[?&]{param}=[^&]*", "", v)
+        v = v.rstrip("?&")
+        return v
+
+    @property
+    def db_connect_args(self) -> dict:
+        """Return asyncpg SSL connect_args when the DB host requires SSL."""
+        needs_ssl = any(
+            kw in self.DATABASE_URL
+            for kw in ("neon.tech", "ssl=require", "render.com")
+        )
+        return {"ssl": True} if needs_ssl else {}
 
     # JWT
     SECRET_KEY: str = "change-me-to-a-random-secret-key"
