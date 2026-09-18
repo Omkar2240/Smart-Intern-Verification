@@ -9,21 +9,36 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/context/auth-context';
 
 function NavigationGuard() {
-  const { isLoading, isAuthenticated } = useAuth();
+  const { isLoading, isAuthenticated, verificationStatus } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
     if (isLoading) return;
 
-    const inAuthGroup = segments[0] === 'login' || segments[0] === 'register';
+    const segList = segments as string[];
+    const inAuthGroup = segList[0] === 'login' || segList[0] === 'register';
+    const inVerificationGroup = segList[0] === 'verification';
 
-    if (!isAuthenticated && !inAuthGroup) {
-      router.replace('/login');
-    } else if (isAuthenticated && inAuthGroup) {
-      router.replace('/(tabs)');
+    if (!isAuthenticated) {
+      if (!inAuthGroup) {
+        router.replace('/login');
+      }
+    } else {
+      // User is authenticated
+      if (!verificationStatus?.is_verified) {
+        // Not verified yet: MUST complete mandatory verification flow
+        if (!inVerificationGroup) {
+          router.replace('/verification' as any);
+        }
+      } else {
+        // Identity verified: allow dashboard access
+        if (inAuthGroup || inVerificationGroup) {
+          router.replace('/(tabs)');
+        }
+      }
     }
-  }, [isLoading, isAuthenticated, segments]);
+  }, [isLoading, isAuthenticated, verificationStatus, segments]);
 
   return null;
 }
@@ -37,6 +52,7 @@ function MainContent() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="register" options={{ headerShown: false }} />
+        <Stack.Screen name="verification" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal', headerShown: true }} />
       </Stack>

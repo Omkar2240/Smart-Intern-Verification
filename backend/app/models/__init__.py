@@ -2,5 +2,17 @@ from app.models.user import User
 from app.models.refresh_token import RefreshToken
 from app.models.student_profile import StudentProfile
 from app.models.verification_token import VerificationToken
+from app.models.college import College
+from app.models.identity_verification import IdentityVerification
+from app.models.face_embedding import FaceEmbedding
 
-__all__ = ["User", "RefreshToken", "StudentProfile", "VerificationToken"]
+__all__ = [
+    "User",
+    "RefreshToken",
+    "StudentProfile",
+    "VerificationToken",
+    "College",
+    "IdentityVerification",
+    "FaceEmbedding",
+]
+

@@ -116,3 +116,10 @@ async def get_optional_user(
 
     result = await db.execute(select(User).where(User.id == user_uuid))
     return result.scalar_one_or_none()
+
+
+# Verification access control
+from app.dependencies.verification import (  # noqa: E402
+    IdentityVerificationRequiredException,
+    require_identity_verified,
+)

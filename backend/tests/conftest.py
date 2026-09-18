@@ -47,18 +47,18 @@ async def engine():
 
 @pytest_asyncio.fixture
 async def db_session(engine) -> AsyncGenerator[AsyncSession, None]:
-    """Yield a fresh session that rolls back after each test."""
+    """Yield a fresh session and clean up tables after each test."""
     async_session = async_sessionmaker(
         bind=engine,
         class_=AsyncSession,
         expire_on_commit=False,
     )
     async with async_session() as session:
-        async with session.begin():
-            try:
-                yield session
-            finally:
-                await session.rollback()
+        yield session
+        # Clean up all tables so tests do not leak records
+        for table in reversed(Base.metadata.sorted_tables):
+            await session.execute(table.delete())
+        await session.commit()
 
 
 @pytest_asyncio.fixture

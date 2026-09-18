@@ -31,6 +31,21 @@ app.add_middleware(
 # Include v1 API routes
 app.include_router(v1_router)
 
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from app.dependencies.verification import IdentityVerificationRequiredException
+
+@app.exception_handler(IdentityVerificationRequiredException)
+async def identity_verification_exception_handler(request: Request, exc: IdentityVerificationRequiredException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "detail": exc.detail,
+            "code": exc.code,
+        },
+    )
+
+
 
 @app.get("/", tags=["Health"])
 async def root():

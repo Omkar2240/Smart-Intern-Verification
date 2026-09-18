@@ -13,11 +13,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/auth-context';
 import { api, StudentProfile } from '@/services/api';
 
 export default function HomeScreen() {
-  const { user, logout } = useAuth();
+  const router = useRouter();
+  const { user, logout, verificationStatus } = useAuth();
 
   // Profile State
   const [profile, setProfile] = useState<StudentProfile | null>(null);
@@ -102,6 +104,18 @@ export default function HomeScreen() {
   };
 
   const handleCheckInToggle = () => {
+    if (!verificationStatus?.is_verified) {
+      Alert.alert(
+        'Identity Verification Required',
+        'You must complete your one-time identity verification before marking attendance or registering companies.',
+        [
+          { text: 'Verify Now', onPress: () => router.push('/verification' as any) },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
+
     if (!isCheckedIn) {
       const timeStamp = `${currentTime.timeStr} ${currentTime.ampm}`;
       setIsCheckedIn(true);

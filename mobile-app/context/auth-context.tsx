@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { api, ApiUser, LoginPayload, RegisterPayload } from '@/services/api';
+import { api, ApiUser, LoginPayload, RegisterPayload, VerificationStatus } from '@/services/api';
 import { storage } from '@/services/storage';
 
 interface AuthContextType {
   user: ApiUser | null;
+  verificationStatus: VerificationStatus | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (data: LoginPayload) => Promise<void>;
@@ -11,29 +12,40 @@ interface AuthContextType {
   logout: () => Promise<void>;
   checkAuthStatus: () => Promise<boolean>;
   refreshUser: () => Promise<void>;
+  refreshVerificationStatus: () => Promise<VerificationStatus | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<ApiUser | null>(null);
+  const [verificationStatus, setVerificationStatus] = useState<VerificationStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const fetchVerification = async (): Promise<VerificationStatus | null> => {
+    try {
+      const status = await api.getVerificationStatus();
+      setVerificationStatus(status);
+      return status;
+    } catch (e) {
+      console.warn('Failed to fetch verification status:', e);
+      return null;
+    }
+  };
 
   const checkAuthStatus = async (): Promise<boolean> => {
     try {
       const token = await storage.getAccessToken();
 
       if (!token) {
-        // No stored token -> user is definitely not authenticated
         setUser(null);
+        setVerificationStatus(null);
         return false;
       }
 
-      // Stored token exists -> verify with backend
       try {
         const status = await api.getAuthStatus();
         if (status.authenticated && status.user) {
-          // Hydrate full user details (/api/v1/users/me) so registration/mobile numbers are populated
           try {
             const me = await api.getMe();
             setUser(me);
@@ -44,10 +56,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } catch {
             setUser(status.user);
           }
+
+          // Fetch verification status
+          await fetchVerification();
           return true;
         } else {
           await storage.clearAuthData();
           setUser(null);
+          setVerificationStatus(null);
           return false;
         }
       } catch (backendError) {
@@ -55,14 +71,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const storedUser = await storage.getStoredUser();
         if (storedUser) {
           setUser(storedUser);
+          await fetchVerification();
           return true;
         }
         setUser(null);
+        setVerificationStatus(null);
         return false;
       }
     } catch (e) {
       console.warn('Auth check error:', e);
       setUser(null);
+      setVerificationStatus(null);
       return false;
     } finally {
       setIsLoading(false);
@@ -73,7 +92,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       const response = await api.login(data);
-      // Hydrate full user record (/api/v1/users/me)
       try {
         const me = await api.getMe();
         setUser(me);
@@ -81,6 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch {
         setUser(response.user);
       }
+      await fetchVerification();
     } finally {
       setIsLoading(false);
     }
@@ -90,7 +109,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       const response = await api.register(data);
-      // Hydrate full user record (/api/v1/users/me)
       try {
         const me = await api.getMe();
         setUser(me);
@@ -98,6 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch {
         setUser(response.user);
       }
+      await fetchVerification();
     } finally {
       setIsLoading(false);
     }
@@ -108,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await api.logout();
       setUser(null);
+      setVerificationStatus(null);
     } finally {
       setIsLoading(false);
     }
@@ -127,6 +147,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshVerificationStatus = async (): Promise<VerificationStatus | null> => {
+    return await fetchVerification();
+  };
+
   useEffect(() => {
     checkAuthStatus();
   }, []);
@@ -135,6 +159,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
+        verificationStatus,
         isLoading,
         isAuthenticated: !!user,
         login,
@@ -142,6 +167,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         checkAuthStatus,
         refreshUser,
+        refreshVerificationStatus,
       }}
     >
       {children}

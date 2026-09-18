@@ -88,6 +88,39 @@ export interface ProfilePayload {
   roll_number: string;
 }
 
+export interface College {
+  id: string;
+  name: string;
+  city: string;
+  state: string;
+  country: string;
+  code?: string;
+  is_active: boolean;
+}
+
+export interface VerificationStatus {
+  is_verified: boolean;
+  current_step: 'college_selection' | 'college_id' | 'face' | 'completed';
+  college_id: string | null;
+  college_name: string | null;
+  college_verified: boolean;
+  college_id_verified: boolean;
+  college_id_status: 'not_started' | 'pending' | 'verified' | 'rejected' | 'manual_review';
+  face_verified: boolean;
+  face_status: 'not_started' | 'pending' | 'verified' | 'rejected';
+  overall_status: 'not_started' | 'pending' | 'verified' | 'rejected' | 'manual_review';
+  rejection_reason: string | null;
+}
+
+export interface VerificationStepResult {
+  success: boolean;
+  message: string;
+  step: string;
+  step_status: string;
+  overall_status: string;
+  extracted_metadata?: Record<string, any>;
+}
+
 class ApiService {
   private baseUrl = API_BASE_URL;
   private readonly defaultTimeoutMs = 6000; // 6s timeout to prevent hanging
@@ -169,6 +202,7 @@ class ApiService {
 
     if (!response.ok) {
       let errorDetail = 'Request failed';
+      let errorCode: string | undefined = undefined;
       try {
         const errorData = await response.json();
         if (typeof errorData.detail === 'string') {
@@ -176,10 +210,16 @@ class ApiService {
         } else if (Array.isArray(errorData.detail)) {
           errorDetail = errorData.detail.map((d: any) => d.msg || JSON.stringify(d)).join(', ');
         }
+        if (errorData.code) {
+          errorCode = errorData.code;
+        }
       } catch {
         errorDetail = `HTTP ${response.status}: ${response.statusText}`;
       }
-      throw new Error(errorDetail);
+      const error: any = new Error(errorDetail);
+      error.code = errorCode;
+      error.status = response.status;
+      throw error;
     }
 
     try {
@@ -356,6 +396,67 @@ class ApiService {
       true
     );
   }
+
+  // -------------------------------------------------------------------------
+  // Identity Verification Endpoints
+  // -------------------------------------------------------------------------
+
+  async getVerificationStatus(): Promise<VerificationStatus> {
+    return this.request<VerificationStatus>('/api/v1/verification/status', { method: 'GET' }, true);
+  }
+
+  async getColleges(search?: string): Promise<College[]> {
+    const query = search ? `?search=${encodeURIComponent(search)}` : '';
+    return this.request<College[]>(`/api/v1/colleges${query}`, { method: 'GET' }, false);
+  }
+
+  async selectCollege(collegeId: string): Promise<VerificationStepResult> {
+    return this.request<VerificationStepResult>(
+      '/api/v1/verification/college',
+      {
+        method: 'POST',
+        body: JSON.stringify({ college_id: collegeId }),
+      },
+      true
+    );
+  }
+
+  async uploadVerificationCollegeId(fileUri: string, mimeType: string, filename: string): Promise<VerificationStepResult> {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: fileUri,
+      type: mimeType,
+      name: filename,
+    } as any);
+
+    return this.request<VerificationStepResult>(
+      '/api/v1/verification/college-id',
+      {
+        method: 'POST',
+        body: formData,
+      },
+      true
+    );
+  }
+
+  async enrollFace(fileUri: string, mimeType: string, filename: string): Promise<VerificationStepResult> {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: fileUri,
+      type: mimeType,
+      name: filename,
+    } as any);
+
+    return this.request<VerificationStepResult>(
+      '/api/v1/verification/face',
+      {
+        method: 'POST',
+        body: formData,
+      },
+      true
+    );
+  }
 }
 
 export const api = new ApiService();
+
