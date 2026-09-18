@@ -5,6 +5,8 @@ from app.models.verification_token import VerificationToken
 from app.models.college import College
 from app.models.identity_verification import IdentityVerification
 from app.models.face_embedding import FaceEmbedding
+from app.models.admin_audit_log import AdminAuditLog
+from app.models.college_student_roster import CollegeStudentRoster
 
 __all__ = [
     "User",
@@ -14,5 +16,6 @@ __all__ = [
     "College",
     "IdentityVerification",
     "FaceEmbedding",
+    "AdminAuditLog",
+    "CollegeStudentRoster",
 ]
-

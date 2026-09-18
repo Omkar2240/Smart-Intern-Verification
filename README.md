@@ -1,335 +1,218 @@
 # Smart Internship Verification System
 
-## Introduction
-
-The **Smart Internship Verification System** is an intelligent multi-agent application designed to verify and validate internship attendance through facial recognition, geofencing, and AI-powered intent routing. This system combines computer vision, geolocation services, and intelligent agent-based processing to ensure secure and accurate verification of intern presence during work hours.
-
-The system operates through a coordinated network of specialized agents that work together to:
-
-- **Route** incoming requests to appropriate handlers
-- **Verify** intern identity through facial recognition
-- **Validate** location using geofencing technology
-- **Manage** verification data and attempt history
+An enterprise-grade, multi-tier internship attendance and identity verification platform combining biometrics (ArcFace embeddings, YuNet face detection), document OCR (automated student ID validation), geofencing verification, and role-based administration.
 
 ---
 
-## System Architecture
+## Architecture Overview
 
-### Key Components
+```mermaid
+graph TD
+    A[Mobile App (Expo / React Native)] -->|REST API + JWT| B[FastAPI Backend]
+    W[Admin Web Portal (Next.js / React)] -->|REST API + Admin JWT| B
+    B --> C[(PostgreSQL Database)]
+    B --> D[Biometric Engine (YuNet + ArcFace)]
+    B --> E[Document OCR Engine (Tesseract)]
+    B --> F[Object Storage / Secure S3]
+```
 
-#### 1. **Router Agent** (`router_agent.py`)
-
-- Analyzes user prompts and classifies them into three intent categories:
-  - `analytics`: Data analysis and reporting requests
-  - `general_chat`: General conversation and inquiries
-  - `support`: Technical support and assistance requests
-- Uses Ollama/Gemma model for intent classification with confidence scoring
-- Returns structured JSON responses with reasoning
-
-#### 2. **Verify Agent** (`verify-agent.py`)
-
-Core verification module with three main functionalities:
-
-**Module 1: Dynamic Registration**
-
-- Captures webcam frames for student registration
-- Saves baseline facial images for comparison
-
-**Module 2: Facial Recognition**
-
-- Uses DeepFace library for accurate face comparison
-- Compares live attempt images against stored database images
-- Provides confidence scores for verification accuracy
-
-**Module 3: Geofencing Verification**
-
-- Validates student location using GPS coordinates
-- Enforces 50-meter radius from designated office location
-- Prevents remote or unauthorized location verification
-
-#### 3. **Memory Agent** (`memory_agent.py`)
-
-- Manages session state and conversation history
-- Stores verification attempt records
-- Maintains context across multiple interactions
-
-#### 4. **Main Router** (`main.py`)
-
-- Entry point for the application
-- Orchestrates communication between agents
-
-### Database
-
-- Stores student registration images in the `database/` folder
-- Maintains verification attempt logs
-- Supports multi-student verification scenarios
+The system consists of three primary modules:
+1. **FastAPI Backend (`/backend`)**: High-performance asynchronous API, SQLAlchemy 2.0 ORM, Alembic migrations, biometrics engine, OCR processing, and access control.
+2. **Mobile Application (`/mobile-app`)**: Student mobile client with mandatory 3-step onboarding verification, geofenced check-in, face verification, and student dashboard.
+3. **Admin Web Portal (`/admin-portal` - Planned)**: Comprehensive administrative oversight console for verification queues, college management, attendance audits, and anomaly monitoring.
 
 ---
 
-## Technical Stack
+# Admin System Implementation Plan
 
-| Component            | Purpose                                |
-| -------------------- | -------------------------------------- |
-| **Python 3.13+**     | Core runtime environment               |
-| **Pydantic**         | Data validation and structured outputs |
-| **DeepFace**         | Facial recognition and comparison      |
-| **OpenCV**           | Video capture and image processing     |
-| **Geopy**            | Geolocation and distance calculation   |
-| **Ollama**           | Local LLM model runner                 |
-| **Gemma 3 4B**       | Intent classification model            |
-| **PyTorch**          | Deep learning framework                |
-| **TensorFlow/Keras** | Neural network support                 |
+This section provides the end-to-end technical blueprint for building and integrating the **Admin Portal and Management System**.
+
+## 1. Objectives & Key Requirements
+
+1. **Identity Verification Queue**: Streamline manual review of student college ID cards flagged by the automated OCR system (`manual_review` or `rejected`).
+2. **Biometric Governance**: Audit enrolled face embeddings, handle re-enrollment requests, and monitor attendance facial matching thresholds without storing raw photos.
+3. **Institution & Whitelist Directory**: Manage accredited colleges, student enrollment whitelists (roll numbers/emails), and automated OCR matching patterns.
+4. **Internship & Company Management**: Administer partner companies, geofence coordinates (lat/long/radius), and student placement attachments.
+5. **Real-time Attendance & Anti-Spoofing Audits**: Live monitor of check-in attempts, geofence distance violations, and liveness/biometric score anomalies.
+6. **Role-Based Access Control (RBAC)**: Distinct permissions for Super Admins, College Department Coordinators, and Company Supervisors.
 
 ---
 
-## Installation
+## 2. Role-Based Access Control (RBAC) Hierarchy
 
-### Prerequisites
+| Role | Scope | Key Permissions |
+| :--- | :--- | :--- |
+| **`super_admin`** | Platform-wide | Full system access, manage colleges, manage admins, audit logs, system configuration. |
+| **`college_admin`** | Specific College | Review college ID cards for their institution, import student lists, view intern attendance reports. |
+| **`company_supervisor`** | Specific Company | Verify assigned intern check-ins, approve daily diaries, configure company geofence boundaries. |
+| **`student`** | Self | Complete onboarding, upload ID, enroll face, mark geofenced attendance, fill daily diary. |
 
-Before installing the Smart Internship Verification System, ensure you have:
+---
 
-- **Python 3.13** or higher
-- **pip** 26.1.2 or higher
-- **Git** (for cloning the repository)
-- **Webcam** (for facial registration and verification)
-- **Ollama** installed and running (for intent classification)
+## 3. Database Schema Extensions
 
-### Step 1: Clone the Repository
-
-```bash
-git clone https://github.com/Omkar2240/Smart-Intern-Verification.git
-cd multi-agents
+### 3.1. User Model Updates (`users` table)
+```sql
+ALTER TABLE users ADD COLUMN role VARCHAR(50) NOT NULL DEFAULT 'student';
+CREATE INDEX ix_users_role ON users (role);
 ```
 
-### Step 2: Set Up Python Environment
-
-#### Option A: Using Python Virtual Environment (Recommended)
-
-```bash
-# Create a virtual environment
-python -m venv .venv
-
-# Activate the virtual environment
-# On Windows:
-.venv\Scripts\activate
-
-# On macOS/Linux:
-source .venv/bin/activate
+### 3.2. Admin Audit Log Table (`admin_audit_logs`)
+Records every administrative action for compliance and non-repudiation.
+```sql
+CREATE TABLE admin_audit_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    admin_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    action VARCHAR(100) NOT NULL,
+    target_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    details JSONB,
+    ip_address VARCHAR(45),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX ix_admin_audit_logs_admin ON admin_audit_logs(admin_id);
+CREATE INDEX ix_admin_audit_logs_created_at ON admin_audit_logs(created_at);
 ```
 
-#### Option B: Using UV (Fast Python Package Manager)
-
-```bash
-# If you have UV installed
-uv sync
-```
-
-### Step 3: Install Dependencies
-
-```bash
-# Install all required packages
-pip install -e .
-
-# Or manually install dependencies
-pip install deepface>=0.0.100 \
-    geopy>=2.5.0 \
-    ollama>=0.6.2 \
-    opencv-python>=5.0.0.93 \
-    pydantic>=2.13.4 \
-    tf-keras>=2.21.0 \
-    torch>=2.13.0
-```
-
-### Step 4: Install and Start Ollama
-
-Download Ollama from [ollama.ai](https://ollama.ai) and install it.
-
-```bash
-# Pull the Gemma 3 4B model
-ollama pull gemma3:4b
-
-# Start the Ollama server (runs on http://localhost:11434)
-ollama serve
-```
-
-Keep the Ollama server running in a separate terminal while using the system.
-
-### Step 5: Set Up Database Directory
-
-```bash
-# Create the database folder for storing student images
-mkdir -p database
-```
-
-### Step 6: Configure System Settings
-
-Edit `verify-agent.py` to customize:
-
-- Office location coordinates (OFFICE_LATITUDE, OFFICE_LONGITUDE)
-- Geofence radius (MAX_ALLOWED_METERS)
-- Student ID and database paths
-
-```python
-# Configuration section in verify-agent.py
-OFFICE_LATITUDE = 19.0760
-OFFICE_LONGITUDE = 72.8777
-STUDENT_LATITUDE = 19.0760
-STUDENT_LONGITUDE = 72.8777
-MAX_ALLOWED_METERS = 50.0
-```
-
-### Step 7: Verify Installation
-
-```bash
-# Test that all dependencies are properly installed
-python -c "import deepface, cv2, geopy, ollama, pydantic; print('✅ All dependencies installed!')"
-
-# Run the main application
-python main.py
+### 3.3. College Whitelist Roster (`college_student_rosters`)
+Pre-approved student roll numbers and registration emails to achieve 100% automated OCR verification.
+```sql
+CREATE TABLE college_student_rosters (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    college_id UUID NOT NULL REFERENCES colleges(id) ON DELETE CASCADE,
+    student_name VARCHAR(255) NOT NULL,
+    registration_number VARCHAR(100) NOT NULL,
+    email VARCHAR(320),
+    department VARCHAR(100),
+    is_claimed BOOLEAN NOT NULL DEFAULT FALSE,
+    claimed_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_college_registration UNIQUE (college_id, registration_number)
+);
 ```
 
 ---
 
-## Usage
+## 4. Backend Admin API Specifications
 
-### Basic Workflow
+All admin routes are mounted under `/api/v1/admin` and protected by the `require_admin` dependency.
 
-1. **Start Ollama Server** (in a separate terminal):
+### 4.1. Identity Verification Queue
+* **`GET /api/v1/admin/verifications`**:
+  * Paginated list of student submissions filtered by `status` (`manual_review`, `rejected`, `verified`, `all`).
+  * Returns user profile details, selected college, OCR confidence scores, and extracted text.
+* **`GET /api/v1/admin/verifications/{user_id}/card-image`**:
+  * Generates a short-lived secure signed URL or streams the uploaded ID document image for review.
+* **`POST /api/v1/admin/verifications/{user_id}/approve`**:
+  * Approves the student's ID card. Sets `college_id_status = 'verified'`.
+  * If face enrollment is complete, automatically promotes `overall_status = 'verified'` and unlocks attendance features.
+* **`POST /api/v1/admin/verifications/{user_id}/reject`**:
+  * Rejects the ID card with a mandatory `rejection_reason` (e.g., *"Text illegible"*, *"Name does not match"*).
+  * Resets Step 2 on the student's mobile app so they can retake the photo.
+* **`POST /api/v1/admin/verifications/{user_id}/reset-biometrics`**:
+  * Clears biometric face embedding and allows the student to repeat Step 3 (face capture) in case of illumination or camera issues.
 
-   ```bash
-   ollama serve
-   ```
+### 4.2. College & Institution Directory
+* **`GET /api/v1/admin/colleges`**: List all institutions with student count and verification stats.
+* **`POST /api/v1/admin/colleges`**: Register a new institution (Code, Name, Domains, Address, Geofence coordinates).
+* **`PUT /api/v1/admin/colleges/{id}`**: Update college details or toggle active status.
+* **`POST /api/v1/admin/colleges/{id}/roster/upload`**: Bulk upload student whitelist via CSV/Excel.
 
-2. **Run the Application**:
+### 4.3. Attendance & Geofencing Intelligence
+* **`GET /api/v1/admin/attendance/live`**: Real-time stream of check-ins across all partner companies.
+* **`GET /api/v1/admin/attendance/anomalies`**: Filter check-ins where:
+  * Geofence distance $> \text{allowed radius}$ (GPS spoofing attempts).
+  * Face cosine similarity is borderline ($0.60 - 0.70$).
+  * Repeated check-in attempts from duplicate devices.
+* **`GET /api/v1/admin/analytics/summary`**: High-level KPI metrics (Total Verified Interns, Daily Attendance Rate, Verification Queue Backlog).
 
-   ```bash
-   python main.py
-   ```
+---
 
-3. **Student Registration**:
-   - Press spacebar to capture registration photo when prompted
-   - System stores the baseline facial image in the database
+## 5. Admin Web Portal Architecture & UI Plan
 
-4. **Verification Attempt**:
-   - System captures live webcam frame
-   - Compares against stored baseline image using facial recognition
-   - Validates GPS location within geofence radius
-   - Returns verification result with confidence score
+### 5.1. Tech Stack
+* **Framework**: Next.js 15 (App Router) / React 19
+* **Styling**: Tailwind CSS + Shadcn UI component library
+* **State Management**: TanStack Query (React Query) + Zustand
+* **Tables & Filtering**: TanStack Table v8 (virtualized pagination, column filters, multi-sort)
+* **Visualizations**: Recharts (Attendance Trends, Approval Rates, Anomaly Breakdown)
+* **Maps**: Mapbox GL / Leaflet for geofence and check-in radius inspection
 
-### Router Agent Usage
+### 5.2. UI Screen Sitemap
 
-```python
-from router_agent import router_agent
+```
+/admin
+├── /login                    # Admin authentication with MFA option
+├── /dashboard                # KPI cards (Pending Reviews, Verified Interns, Today's Attendance)
+├── /verifications            # Verification Queue (Side-by-side card inspector + OCR comparison)
+│   └── /[id]                 # Detailed verification inspector & biometric audit
+├── /students                 # Searchable directory of all interns with status pills
+│   └── /[id]                 # Student 360 view (Profile, Attendance, Diary, Companies)
+├── /colleges                 # College Directory, OCR keywords & whitelist rosters
+├── /companies                # Partner company profiles, geofence radius visualizer
+├── /attendance               # Global attendance log with GPS map pins
+└── /audit-logs               # Immutable log of all administrative actions
+```
 
-# Analyze user intent
-result = router_agent("I need a report on attendance trends")
-print(result.intent)        # Output: 'analytics'
-print(result.confidence)    # Output: 0.95
-print(result.reasoning)     # Reasoning explanation
+### 5.3. Key UI Mockup: Verification Review Drawer
+```
++-------------------------------------------------------------------------------+
+| Review Student Verification: Rahul Sharma (#GHRCEN-2023-CS042)                |
++---------------------------------------+---------------------------------------+
+| Uploaded ID Card Photo                | OCR Extracted vs Registered Data      |
+|                                       |                                       |
+| [===================================] | Field          | System     | OCR     |
+| [  STUDENT ID CARD                  ] | ---------------+------------+---------|
+| [  Name: Rahul Sharma               ] | Student Name   | R. Sharma  | R. SHARMA
+| [  Roll: 2023-CS042                 ] | College        | GHRCEN     | GHRCEN  |
+| [  College: G. H. Raisoni College.. ] | Registration # | 2023-CS042 | 2023-CS04
+| [===================================] | Confidence Score: 94.2% [High Match]  |
+|                                       |                                       |
++---------------------------------------+---------------------------------------+
+| Rejection Reason (if rejecting):                                              |
+| [ Dropdown: Name Mismatch / Illegible Image / Expired Card / Custom...      ] |
+|                                                                               |
+| [  Reject Document  ]                                  [  Approve Student  ]  |
++-------------------------------------------------------------------------------+
 ```
 
 ---
 
-## Project Structure
+## 6. Phased Implementation Roadmap
 
-```
-multi-agents/
-├── main.py                 # Application entry point
-├── router_agent.py        # Intent routing agent
-├── verify-agent.py        # Core verification logic
-├── memory_agent.py        # Memory and state management
-├── pyproject.toml         # Project configuration
-├── README.md              # This file
-├── database/              # Student registration images
-├── live_attempt.jpg       # Current verification attempt
-├── .venv/                 # Python virtual environment
-└── .python-version        # Python version specification
-```
+### Phase 1: Backend RBAC & Admin Verification Endpoints
+- [ ] Add `role` column to `users` model and generate Alembic migration.
+- [ ] Implement `require_admin` dependency checking `user.role in ['super_admin', 'college_admin']`.
+- [ ] Create `backend/app/api/v1/admin/` router module.
+- [ ] Implement `/verifications` list, approve, reject, and biometric reset endpoints.
+- [ ] Write unit tests for all admin endpoints (`pytest tests/test_admin.py`).
 
----
+### Phase 2: Whitelist Roster & College Management
+- [ ] Implement `college_student_rosters` table and CSV upload parser.
+- [ ] Add automated whitelist lookup in `verification_service.py` to auto-approve students on the roster.
+- [ ] Create CRUD endpoints for colleges with OCR keyword configurations.
 
-## System Requirements
+### Phase 3: Web Portal Frontend Foundation
+- [ ] Initialize Next.js project in `/admin-portal` with Tailwind CSS & Shadcn UI.
+- [ ] Setup Axios/Fetch API client with automatic JWT token refresh.
+- [ ] Build Admin Login screen and Auth context.
+- [ ] Implement Main Layout with navigation sidebar, header, and role-based route guard.
 
-| Requirement         | Minimum   | Recommended                               |
-| ------------------- | --------- | ----------------------------------------- |
-| RAM                 | 4 GB      | 8 GB                                      |
-| GPU                 | Optional  | NVIDIA CUDA 11.8+ (for faster processing) |
-| Storage             | 2 GB      | 5 GB                                      |
-| Disk Space (Models) | 2 GB      | 4 GB                                      |
-| Internet            | For setup | Not required to run                       |
+### Phase 4: Review Queue & Analytics UI
+- [ ] Build the `/verifications` screen with TanStack Table and status filters.
+- [ ] Build the side-by-side ID card viewer and OCR diff inspector.
+- [ ] Implement Approve / Reject modal actions with real-time feedback toast notifications.
+- [ ] Build the Executive Dashboard with live KPI counters and check-in timeline.
 
----
-
-## Troubleshooting
-
-### Issue: Webcam Not Detected
-
-**Solution**: Ensure your webcam is connected and not in use by other applications.
-
-### Issue: Ollama Connection Error
-
-**Solution**: Ensure Ollama is running on `http://localhost:11434`. Restart with `ollama serve`.
-
-### Issue: DeepFace Model Download Fails
-
-**Solution**: Ensure you have internet connectivity during the first run. DeepFace downloads models automatically.
-
-### Issue: Geofence Validation Always Fails
-
-**Solution**: Update OFFICE_LATITUDE and OFFICE_LONGITUDE to match your actual office coordinates.
-
-### Issue: Python Version Incompatibility
-
-**Solution**: Ensure you're using Python 3.13 or higher:
-
-```bash
-python --version
-```
+### Phase 5: Geofencing Maps & Anomaly Auditing
+- [ ] Integrate interactive map showing company coordinates and geofence circles.
+- [ ] Plot real-time attendance check-in pins (Green = Inside Geofence, Red = Outside).
+- [ ] Build export feature for attendance reports (CSV / Excel / PDF).
 
 ---
 
-## Contributing
+## 7. Security & Compliance Safeguards
 
-Contributions are welcome! Please follow these steps:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
----
-
-## License
-
-This project is part of the Smart Internship Verification system. For licensing information, please refer to the LICENSE file.
-
----
-
-## Support
-
-For issues, questions, or suggestions:
-
-- Open an issue on [GitHub](https://github.com/Omkar2240/Smart-Intern-Verification/issues)
-- Contact the development team
-
----
-
-## Version
-
-**Current Version**: 0.1.0
-
----
-
-## Acknowledgments
-
-This system leverages:
-
-- **DeepFace** for advanced facial recognition
-- **OpenCV** for computer vision processing
-- **Ollama & Gemma** for AI-powered intent classification
-- **Geopy** for accurate geolocation services
-
----
-
-**Last Updated**: July 2026
+1. **Biometric Privacy**: Raw face enrollment photos are processed strictly in-memory or in ephemeral storage, converted to mathematical 512-dimension ArcFace vectors, and never exposed via Admin APIs.
+2. **Encrypted ID Document Storage**: Student ID cards are stored in protected private storage buckets with pre-signed URLs expiring after 5 minutes.
+3. **Audit Trail**: Any approval or rejection action records the administrative user ID, timestamp, target student, and previous/new status in `admin_audit_logs`.
+4. **Rate Limiting & MFA**: Admin endpoints enforce strict rate-limiting to prevent brute force and credential stuffing.

@@ -20,6 +20,7 @@ class User(Base, UUIDMixin, TimestampMixin):
     password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    role: Mapped[str] = mapped_column(String(50), default="student", nullable=False, index=True)
 
     # Relationships
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")

@@ -122,4 +122,8 @@ async def get_optional_user(
 from app.dependencies.verification import (  # noqa: E402
     IdentityVerificationRequiredException,
     require_identity_verified,
+)
+from app.dependencies.admin import (  # noqa: E402
+    require_admin,
+    require_super_admin,
 )
