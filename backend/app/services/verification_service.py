@@ -229,6 +229,10 @@ class VerificationService:
         record.rejection_reason = None
         self._recompute_overall_status(record)
 
+        if record.overall_status == "verified":
+            user.is_verified = True
+            db.add(user)
+
         await db.commit()
         await db.refresh(record)
         return record

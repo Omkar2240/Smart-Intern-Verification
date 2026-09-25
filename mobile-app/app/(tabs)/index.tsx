@@ -13,16 +13,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/context/auth-context';
-import { api, StudentProfile } from '@/services/api';
+import { api, StudentProfile, Internship } from '@/services/api';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { user, logout, verificationStatus } = useAuth();
 
-  // Profile State
+  // Profile & Internship State
   const [profile, setProfile] = useState<StudentProfile | null>(null);
+  const [internship, setInternship] = useState<Internship | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -78,24 +79,50 @@ export default function HomeScreen() {
     return () => clearInterval(timer);
   }, []);
 
+  const getStageStep = (stage?: string) => {
+    switch (stage) {
+      case 'submitted':
+        return 1;
+      case 'tp_review':
+        return 2;
+      case 'mentor_review':
+        return 3;
+      case 'verified':
+        return 4;
+      case 'rejected':
+        return -1;
+      default:
+        return 1;
+    }
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
-      const data = await api.getProfile();
-      setProfile(data);
-      setCollege(data.college || '');
-      setBranch(data.branch || '');
-      setRollNumber(data.roll_number || '');
+      const [profileData, activeIntern] = await Promise.all([
+        api.getProfile().catch(() => null),
+        api.getActiveInternship().catch(() => null),
+      ]);
+      setProfile(profileData);
+      setInternship(activeIntern);
+      if (profileData) {
+        setCollege(profileData.college || '');
+        setBranch(profileData.branch || '');
+        setRollNumber(profileData.roll_number || '');
+      }
     } catch {
       setProfile(null);
+      setInternship(null);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -104,12 +131,31 @@ export default function HomeScreen() {
   };
 
   const handleCheckInToggle = () => {
-    if (!verificationStatus?.is_verified) {
+    const isVerified = Boolean(
+      verificationStatus?.is_verified ||
+      verificationStatus?.overall_status === 'verified' ||
+      verificationStatus?.current_step === 'completed' ||
+      user?.is_verified
+    );
+
+    if (!isVerified) {
       Alert.alert(
         'Identity Verification Required',
         'You must complete your one-time identity verification before marking attendance or registering companies.',
         [
           { text: 'Verify Now', onPress: () => router.push('/verification' as any) },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
+
+    if (!internship) {
+      Alert.alert(
+        'Internship Required',
+        'You have not added any internship yet. Please register your company details before marking attendance.',
+        [
+          { text: 'Add Internship', onPress: () => router.push('/internship' as any) },
           { text: 'Cancel', style: 'cancel' },
         ]
       );
@@ -252,10 +298,22 @@ export default function HomeScreen() {
           </View>
 
           {/* Location Pin */}
-          <View style={styles.locationContainer}>
-            <Ionicons name="location-sharp" size={16} color="#4F46E5" />
-            <Text style={styles.locationText}>HQ Office, Block A</Text>
-          </View>
+          <TouchableOpacity
+            style={styles.locationContainer}
+            onPress={() => router.push('/internship' as any)}
+            activeOpacity={0.75}
+          >
+            <Ionicons
+              name={internship ? "location-sharp" : "location-outline"}
+              size={16}
+              color={internship ? "#4F46E5" : "#D97706"}
+            />
+            <Text style={[styles.locationText, !internship && { color: '#B45309', fontWeight: '600' }]} numberOfLines={1}>
+              {internship
+                ? `${internship.company_name} • ${internship.location || 'Assigned Workplace'}`
+                : 'No workplace linked • Tap to Add Internship'}
+            </Text>
+          </TouchableOpacity>
 
           {/* Check In / Out Button */}
           <TouchableOpacity
@@ -312,58 +370,218 @@ export default function HomeScreen() {
         </View>
 
         {/* ================================================================= */}
-        {/* Internship Verification Multi-Stage Timeline Card */}
+        {/* Internship Verification Section (Dynamic or Empty State)         */}
         {/* ================================================================= */}
-        <View style={styles.verificationCard}>
-          <View style={styles.verificationHeader}>
-            <Ionicons name="shield-checkmark" size={20} color="#F59E0B" />
-            <Text style={styles.verificationTitle}>Internship Verification</Text>
+        {!internship ? (
+          <View style={styles.noInternshipCard}>
+            <View style={styles.noInternshipHeader}>
+              <View style={styles.noInternshipIconCircle}>
+                <MaterialCommunityIcons name="briefcase-plus-outline" size={26} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.noInternshipTitle}>No Internship Linked</Text>
+                <Text style={styles.noInternshipSubtitle}>
+                  Register your internship to activate attendance check-in and university T&P approval.
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.addInternshipPrimaryBtn}
+              onPress={() => router.push('/internship' as any)}
+              activeOpacity={0.85}
+            >
+              <Feather name="plus-circle" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.addInternshipPrimaryBtnText}>Add Internship</Text>
+            </TouchableOpacity>
           </View>
-
-          {/* Step Pipeline Tracker */}
-          <View style={styles.timelineContainer}>
-            {/* Step 1: Submitted (Completed) */}
-            <View style={styles.stepItem}>
-              <View style={styles.iconCircleDone}>
-                <Ionicons name="checkmark" size={14} color="#111827" />
+        ) : (
+          <View style={styles.verificationCard}>
+            <View style={styles.verificationHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                <Ionicons name="shield-checkmark" size={20} color="#F59E0B" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.verificationTitle} numberOfLines={1}>
+                    {internship.company_name}
+                  </Text>
+                  <Text style={styles.verificationSubtitle}>
+                    {internship.verification_stage === 'verified'
+                      ? 'Approved & Verified'
+                      : internship.verification_stage === 'rejected'
+                      ? 'Action Required • Rejected'
+                      : internship.verification_stage === 'mentor_review'
+                      ? 'Stage 3: Mentor Review'
+                      : internship.verification_stage === 'tp_review'
+                      ? 'Stage 2: T&P Cell Scrutiny'
+                      : 'Stage 1: Submitted'}
+                  </Text>
+                </View>
               </View>
-              <Text style={styles.stepLabel}>Submitted</Text>
+
+              <TouchableOpacity
+                style={styles.manageInternshipBtn}
+                onPress={() => router.push('/internship' as any)}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.manageInternshipBtnText}>Manage</Text>
+                <Feather name="chevron-right" size={14} color="#D97706" />
+              </TouchableOpacity>
             </View>
 
-            {/* Connecting Line 1 */}
-            <View style={styles.stepConnectorDone} />
+            {/* Dynamic Step Pipeline Tracker */}
+            {(() => {
+              const currentStep = getStageStep(internship.verification_stage);
+              const isRejected =
+                internship.verification_stage === 'rejected' || internship.status === 'rejected';
 
-            {/* Step 2: T&P (Completed) */}
-            <View style={styles.stepItem}>
-              <View style={styles.iconCircleDone}>
-                <Ionicons name="checkmark" size={14} color="#111827" />
-              </View>
-              <Text style={styles.stepLabel}>T&P</Text>
-            </View>
+              return (
+                <>
+                  <View style={styles.timelineContainer}>
+                    {/* Step 1: Submitted */}
+                    <View style={styles.stepItem}>
+                      <View style={currentStep >= 1 ? styles.iconCircleDone : styles.iconCirclePending}>
+                        <Ionicons
+                          name={currentStep >= 1 ? 'checkmark' : 'ellipsis-horizontal'}
+                          size={14}
+                          color={currentStep >= 1 ? '#111827' : '#9CA3AF'}
+                        />
+                      </View>
+                      <Text
+                        style={[styles.stepLabel, currentStep === 1 && styles.stepLabelActive]}
+                      >
+                        Submitted
+                      </Text>
+                    </View>
 
-            {/* Connecting Line 2 */}
-            <View style={styles.stepConnectorActive} />
+                    {/* Connecting Line 1 */}
+                    <View
+                      style={
+                        currentStep >= 2 ? styles.stepConnectorDone : styles.stepConnectorPending
+                      }
+                    />
 
-            {/* Step 3: Mentor (Current Active) */}
-            <View style={styles.stepItem}>
-              <View style={styles.iconCircleActive}>
-                <View style={styles.activeInnerDot} />
-              </View>
-              <Text style={[styles.stepLabel, styles.stepLabelActive]}>Mentor</Text>
-            </View>
+                    {/* Step 2: T&P */}
+                    <View style={styles.stepItem}>
+                      <View
+                        style={
+                          currentStep >= 2
+                            ? currentStep === 2
+                              ? styles.iconCircleActive
+                              : styles.iconCircleDone
+                            : styles.iconCirclePending
+                        }
+                      >
+                        {currentStep > 2 ? (
+                          <Ionicons name="checkmark" size={14} color="#111827" />
+                        ) : currentStep === 2 ? (
+                          <View style={styles.activeInnerDot} />
+                        ) : (
+                          <Text style={styles.pendingDotsText}>•••</Text>
+                        )}
+                      </View>
+                      <Text
+                        style={[styles.stepLabel, currentStep === 2 && styles.stepLabelActive]}
+                      >
+                        T&P
+                      </Text>
+                    </View>
 
-            {/* Connecting Line 3 */}
-            <View style={styles.stepConnectorPending} />
+                    {/* Connecting Line 2 */}
+                    <View
+                      style={
+                        currentStep >= 3 ? styles.stepConnectorDone : styles.stepConnectorPending
+                      }
+                    />
 
-            {/* Step 4: Verified (Pending) */}
-            <View style={styles.stepItem}>
-              <View style={styles.iconCirclePending}>
-                <Text style={styles.pendingDotsText}>•••</Text>
-              </View>
-              <Text style={styles.stepLabel}>Verified</Text>
-            </View>
+                    {/* Step 3: Mentor */}
+                    <View style={styles.stepItem}>
+                      <View
+                        style={
+                          currentStep >= 3
+                            ? currentStep === 3
+                              ? styles.iconCircleActive
+                              : styles.iconCircleDone
+                            : styles.iconCirclePending
+                        }
+                      >
+                        {currentStep > 3 ? (
+                          <Ionicons name="checkmark" size={14} color="#111827" />
+                        ) : currentStep === 3 ? (
+                          <View style={styles.activeInnerDot} />
+                        ) : (
+                          <Text style={styles.pendingDotsText}>•••</Text>
+                        )}
+                      </View>
+                      <Text
+                        style={[styles.stepLabel, currentStep === 3 && styles.stepLabelActive]}
+                      >
+                        Mentor
+                      </Text>
+                    </View>
+
+                    {/* Connecting Line 3 */}
+                    <View
+                      style={
+                        currentStep >= 4 ? styles.stepConnectorDone : styles.stepConnectorPending
+                      }
+                    />
+
+                    {/* Step 4: Verified */}
+                    <View style={styles.stepItem}>
+                      <View
+                        style={
+                          currentStep >= 4
+                            ? styles.iconCircleDone
+                            : isRejected
+                            ? styles.iconCircleRejected
+                            : styles.iconCirclePending
+                        }
+                      >
+                        {currentStep >= 4 ? (
+                          <Ionicons name="checkmark" size={14} color="#111827" />
+                        ) : isRejected ? (
+                          <Ionicons name="close" size={14} color="#FFFFFF" />
+                        ) : (
+                          <Text style={styles.pendingDotsText}>•••</Text>
+                        )}
+                      </View>
+                      <Text
+                        style={[
+                          styles.stepLabel,
+                          currentStep === 4 && styles.stepLabelActive,
+                          isRejected && styles.stepLabelRejected,
+                        ]}
+                      >
+                        {isRejected ? 'Rejected' : 'Verified'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Feedback Banner if Rejected */}
+                  {isRejected && (
+                    <View style={styles.homeRejectionNotice}>
+                      <Ionicons name="alert-circle" size={16} color="#DC2626" />
+                      <Text style={styles.homeRejectionText} numberOfLines={2}>
+                        {internship.rejection_reason ||
+                          'Verification rejected by administrator. Tap Manage to edit details.'}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Success Banner if Verified */}
+                  {currentStep === 4 && (
+                    <View style={styles.homeVerifiedNotice}>
+                      <Ionicons name="checkmark-circle" size={16} color="#059669" />
+                      <Text style={styles.homeVerifiedText}>
+                        Internship officially verified by College Administration!
+                      </Text>
+                    </View>
+                  )}
+                </>
+              );
+            })()}
           </View>
-        </View>
+        )}
       </ScrollView>
 
       {/* ================================================================= */}
@@ -722,6 +940,66 @@ const styles = StyleSheet.create({
   },
 
   // -------------------------------------------------------------------------
+  // No Internship Prompt Card
+  // -------------------------------------------------------------------------
+  noInternshipCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
+    borderWidth: 1.5,
+    borderColor: '#FDE68A',
+    marginBottom: 20,
+  },
+  noInternshipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 16,
+  },
+  noInternshipIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FEF3C7',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  noInternshipTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1F2937',
+    marginBottom: 3,
+  },
+  noInternshipSubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+    lineHeight: 18,
+  },
+  addInternshipPrimaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F59E0B',
+    paddingVertical: 12,
+    borderRadius: 14,
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  addInternshipPrimaryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  // -------------------------------------------------------------------------
   // Internship Verification Card
   // -------------------------------------------------------------------------
   verificationCard: {
@@ -740,13 +1018,33 @@ const styles = StyleSheet.create({
   verificationHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 24,
+    justifyContent: 'space-between',
+    marginBottom: 20,
   },
   verificationTitle: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
     color: '#1F2937',
+  },
+  verificationSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#D97706',
+    marginTop: 2,
+  },
+  manageInternshipBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    gap: 2,
+  },
+  manageInternshipBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#B45309',
   },
   timelineContainer: {
     flexDirection: 'row',
@@ -808,6 +1106,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  iconCircleRejected: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#DC2626',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   pendingDotsText: {
     color: '#9CA3AF',
     fontSize: 10,
@@ -828,6 +1135,44 @@ const styles = StyleSheet.create({
   stepLabelActive: {
     color: '#111827',
     fontWeight: '800',
+  },
+  stepLabelRejected: {
+    color: '#DC2626',
+    fontWeight: '800',
+  },
+  homeRejectionNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    padding: 10,
+    borderRadius: 10,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  homeRejectionText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#B91C1C',
+    fontWeight: '600',
+  },
+  homeVerifiedNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#ECFDF5',
+    padding: 10,
+    borderRadius: 10,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  homeVerifiedText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#065F46',
+    fontWeight: '600',
   },
 
   // -------------------------------------------------------------------------

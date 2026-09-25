@@ -19,7 +19,7 @@ import { useAuth } from '@/context/auth-context';
 
 export default function FaceVerificationScreen() {
   const router = useRouter();
-  const { refreshVerificationStatus } = useAuth();
+  const { refreshVerificationStatus, refreshUser } = useAuth();
 
   const [faceUri, setFaceUri] = useState<string | null>(null);
   const [faceMime, setFaceMime] = useState<string>('image/jpeg');
@@ -69,8 +69,9 @@ export default function FaceVerificationScreen() {
 
       setProgressStage('Enrollment complete!');
       await refreshVerificationStatus();
+      await refreshUser();
 
-      router.replace('/verification/complete' as any);
+      router.replace('/(tabs)');
     } catch (e: any) {
       Alert.alert(
         'Face Verification Failed',

@@ -7,6 +7,7 @@ from app.models.identity_verification import IdentityVerification
 from app.models.face_embedding import FaceEmbedding
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.college_student_roster import CollegeStudentRoster
+from app.models.internship import Internship
 
 __all__ = [
     "User",
@@ -18,4 +19,5 @@ __all__ = [
     "FaceEmbedding",
     "AdminAuditLog",
     "CollegeStudentRoster",
+    "Internship",
 ]
