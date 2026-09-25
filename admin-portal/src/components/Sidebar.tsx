@@ -11,6 +11,7 @@ import {
   Clock,
   LogOut,
   Sparkles,
+  Briefcase,
 } from "lucide-react";
 import { useAdminAuth } from "@/context/AdminAuthContext";
 
@@ -36,6 +37,11 @@ export function Sidebar({ pendingReviewCount }: { pendingReviewCount?: number })
       href: "/verifications",
       icon: ShieldCheck,
       badge: pendingReviewCount && pendingReviewCount > 0 ? pendingReviewCount : undefined,
+    },
+    {
+      label: "Student Internships",
+      href: "/internships",
+      icon: Briefcase,
     },
     {
       label: "Colleges & Rosters",

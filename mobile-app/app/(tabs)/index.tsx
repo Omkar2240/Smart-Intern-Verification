@@ -19,7 +19,7 @@ import { api, StudentProfile, Internship } from '@/services/api';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { user, logout, verificationStatus } = useAuth();
+  const { user, logout, verificationStatus, refreshUser, refreshVerificationStatus } = useAuth();
 
   // Profile & Internship State
   const [profile, setProfile] = useState<StudentProfile | null>(null);
@@ -102,6 +102,8 @@ export default function HomeScreen() {
       const [profileData, activeIntern] = await Promise.all([
         api.getProfile().catch(() => null),
         api.getActiveInternship().catch(() => null),
+        refreshUser().catch(() => null),
+        refreshVerificationStatus().catch(() => null),
       ]);
       setProfile(profileData);
       setInternship(activeIntern);

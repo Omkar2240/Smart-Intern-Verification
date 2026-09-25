@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { Users, Search, RefreshCw, Eye, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { Users, Search, RefreshCw, Eye, CheckCircle2, XCircle, Clock, Briefcase } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { ReviewDrawer } from "@/components/ReviewDrawer";
@@ -80,6 +80,7 @@ export default function StudentsPage() {
                 <tr>
                   <th className="py-3.5 px-5">Student</th>
                   <th className="py-3.5 px-5">College Institution</th>
+                  <th className="py-3.5 px-5">Registered Internships</th>
                   <th className="py-3.5 px-5">College ID Document</th>
                   <th className="py-3.5 px-5">Biometrics (ArcFace)</th>
                   <th className="py-3.5 px-5">Overall Access</th>
@@ -89,14 +90,14 @@ export default function StudentsPage() {
               <tbody className="divide-y divide-slate-800">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-16 text-slate-400">
+                    <td colSpan={7} className="text-center py-16 text-slate-400">
                       <RefreshCw className="w-6 h-6 animate-spin mx-auto text-indigo-400 mb-2" />
                       Loading student directory...
                     </td>
                   </tr>
                 ) : students.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-16 text-slate-400">
+                    <td colSpan={7} className="text-center py-16 text-slate-400">
                       No students found matching your search.
                     </td>
                   </tr>
@@ -126,6 +127,22 @@ export default function StudentsPage() {
 
                       <td className="py-3.5 px-5 text-slate-300">
                         {item.college_name || <span className="text-slate-400">—</span>}
+                      </td>
+
+                      <td className="py-3.5 px-5">
+                        {item.internships && item.internships.length > 0 ? (
+                          <div>
+                            <span className="font-semibold text-white flex items-center gap-1.5">
+                              <Briefcase className="w-3.5 h-3.5 text-indigo-400" />
+                              {item.internships.find((i) => i.is_active)?.company_name || item.internships[0].company_name}
+                            </span>
+                            <span className="text-[11px] text-slate-400">
+                              {item.internships.length} {item.internships.length === 1 ? "internship" : "internships"}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-500 italic text-[11px]">None registered</span>
+                        )}
                       </td>
 
                       <td className="py-3.5 px-5 capitalize text-slate-300">

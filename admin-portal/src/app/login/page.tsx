@@ -1,16 +1,28 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Shield, Lock, Mail, Loader2, AlertCircle, Sparkles } from "lucide-react";
 import { useAdminAuth } from "@/context/AdminAuthContext";
 import { api } from "@/lib/api";
 
-export default function LoginPage() {
+function LoginForm() {
   const { login } = useAdminAuth();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const errParam = searchParams.get("error");
+    const expParam = searchParams.get("expired");
+    if (errParam === "unauthorized") {
+      setError("Access denied: Your account does not have administrator privileges (college_admin or super_admin).");
+    } else if (expParam === "1") {
+      setError("Your session has expired. Please sign in again.");
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,6 +35,16 @@ export default function LoginPage() {
       setIsLoading(true);
       setError(null);
       const res = await api.login(email, password);
+
+      // Verify that this account actually has administrative permissions
+      try {
+        await api.getAnalyticsSummary();
+      } catch {
+        api.setToken(null);
+        setError("Access denied: This account exists but does not have administrator privileges.");
+        return;
+      }
+
       login(res.access_token, res.user);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Login failed. Check credentials.";
@@ -112,5 +134,17 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }

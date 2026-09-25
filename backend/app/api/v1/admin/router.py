@@ -8,14 +8,18 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, status
 from fastapi.responses import FileResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_admin, require_super_admin
 from app.models.user import User
+from app.models.internship import Internship
 from app.schemas.admin import (
     AdminVerificationListResponse,
     AdminRejectRequest,
     AdminActionResponse,
+    AdminInternshipListResponse,
+    AdminInternshipStatusUpdate,
     AdminCollegeCreate,
     AdminCollegeUpdate,
     AdminAnalyticsSummary,
@@ -142,6 +146,109 @@ async def reset_biometrics(
         admin_user=current_admin,
         ip_address=client_ip,
     )
+
+
+@router.post("/verifications/{user_id}/force-verify", response_model=AdminActionResponse)
+async def force_verify_student(
+    user_id: UUID,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_admin: Annotated[User, Depends(require_admin)],
+):
+    """
+    Admin directly forces overall student verification to verified.
+    """
+    client_ip = request.client.host if request.client else None
+    return await AdminService.force_verify_student(
+        db=db,
+        user_id=user_id,
+        admin_user=current_admin,
+        ip_address=client_ip,
+    )
+
+
+@router.get("/internships", response_model=AdminInternshipListResponse)
+async def list_admin_internships(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_admin: Annotated[User, Depends(require_admin)],
+    stage: Annotated[str | None, Query(description="Filter by verification stage")] = None,
+    status_filter: Annotated[str | None, Query(alias="status", description="Filter by status: pending, verified, rejected, all")] = None,
+    search: Annotated[str | None, Query(description="Search by company, role, or student details")] = None,
+    college_id: Annotated[UUID | None, Query(description="Filter by student college UUID")] = None,
+    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100, description="Page size")] = 20,
+):
+    """
+    List all student registered internships across the platform for admin verification and review.
+    """
+    return await AdminService.list_internships(
+        db=db,
+        stage=stage,
+        status_filter=status_filter,
+        search=search,
+        college_id=college_id,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.patch("/internships/{internship_id}/status", response_model=AdminActionResponse)
+async def update_internship_verification_status(
+    internship_id: UUID,
+    body: AdminInternshipStatusUpdate,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_admin: Annotated[User, Depends(require_admin)],
+):
+    """
+    Admin updates an internship's verification stage (submitted -> tp_review -> mentor_review -> verified/rejected).
+    """
+    client_ip = request.client.host if request.client else None
+    return await AdminService.update_internship_verification(
+        db=db,
+        internship_id=internship_id,
+        stage=body.verification_stage,
+        status=body.status,
+        rejection_reason=body.rejection_reason,
+        admin_user=current_admin,
+        ip_address=client_ip,
+    )
+
+
+@router.get("/internships/{internship_id}/proof")
+async def get_internship_proof(
+    internship_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_admin: Annotated[User, Depends(require_admin)],
+):
+    """
+    Stream the student's uploaded offer letter or email proof for admin review.
+    """
+    stmt = select(Internship).where(Internship.id == internship_id)
+    res = await db.execute(stmt)
+    internship = res.scalar_one_or_none()
+    if not internship or not internship.offer_letter_url:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No offer letter document attached to this internship.",
+        )
+
+    url = internship.offer_letter_url
+    if "ref=" in url:
+        ref = url.split("ref=")[-1].split("&")[0]
+    else:
+        ref = url
+
+    abs_path = _storage.get_abs_path(ref)
+    if not os.path.exists(abs_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document file not found on storage disk.",
+        )
+
+    ext = os.path.splitext(abs_path)[1].lower()
+    media_type = "application/pdf" if ext == ".pdf" else "image/png" if ext == ".png" else "image/jpeg"
+    return FileResponse(abs_path, media_type=media_type)
 
 
 @router.get("/analytics/summary", response_model=AdminAnalyticsSummary)

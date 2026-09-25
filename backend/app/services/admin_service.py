@@ -19,9 +19,13 @@ from app.models.identity_verification import IdentityVerification
 from app.models.face_embedding import FaceEmbedding
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.college_student_roster import CollegeStudentRoster
+from app.models.internship import Internship
+from app.schemas.internship import InternshipResponse
 from app.schemas.admin import (
     AdminVerificationItem,
     AdminVerificationListResponse,
+    AdminInternshipItem,
+    AdminInternshipListResponse,
     AdminActionResponse,
     AdminCollegeCreate,
     AdminCollegeUpdate,
@@ -49,6 +53,7 @@ class AdminService:
             .outerjoin(IdentityVerification.college)
             .options(
                 selectinload(IdentityVerification.user).selectinload(User.face_embeddings),
+                selectinload(IdentityVerification.user).selectinload(User.internships),
                 selectinload(IdentityVerification.college),
             )
         )
@@ -102,6 +107,10 @@ class AdminService:
 
         items = []
         for r in records:
+            user_internships = [
+                InternshipResponse.model_validate(i)
+                for i in sorted(r.user.internships or [], key=lambda x: (not x.is_active, x.created_at), reverse=True)
+            ]
             items.append(
                 AdminVerificationItem(
                     user_id=r.user_id,
@@ -109,6 +118,7 @@ class AdminService:
                     user_email=r.user.email,
                     registration_number=r.user.registration_number,
                     mobile_number=r.user.mobile_number,
+                    is_verified=bool(r.user.is_verified),
                     college_id=r.college_id,
                     college_name=r.college.name if r.college else None,
                     college_status=r.college_status,
@@ -119,6 +129,7 @@ class AdminService:
                     rejection_reason=r.rejection_reason,
                     has_card_image=bool(r.college_id_storage_ref),
                     has_face_embedding=bool(r.user.face_embeddings),
+                    internships=user_internships,
                     created_at=r.created_at,
                     verified_at=r.verified_at,
                 )
@@ -138,6 +149,7 @@ class AdminService:
             .where(IdentityVerification.user_id == user_id)
             .options(
                 selectinload(IdentityVerification.user).selectinload(User.face_embeddings),
+                selectinload(IdentityVerification.user).selectinload(User.internships),
                 selectinload(IdentityVerification.college),
             )
         )
@@ -270,6 +282,228 @@ class AdminService:
         )
 
     @staticmethod
+    async def force_verify_student(
+        db: AsyncSession,
+        user_id: UUID,
+        admin_user: User,
+        ip_address: str | None = None,
+    ) -> AdminActionResponse:
+        """
+        Admin directly marks the student account as fully verified.
+        """
+        user_stmt = select(User).where(User.id == user_id).options(selectinload(User.identity_verification))
+        user_res = await db.execute(user_stmt)
+        user = user_res.scalar_one_or_none()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Student not found",
+            )
+
+        iv = user.identity_verification
+        now = datetime.now(timezone.utc)
+        if not iv:
+            iv = IdentityVerification(
+                user_id=user.id,
+                college_status="verified",
+                college_id_status="verified",
+                face_status="verified",
+                overall_status="verified",
+                verified_at=now,
+            )
+            db.add(iv)
+        else:
+            iv.college_id_status = "verified"
+            iv.face_status = "verified"
+            iv.overall_status = "verified"
+            iv.rejection_reason = None
+            iv.verified_at = now
+
+        user.is_verified = True
+
+        audit = AdminAuditLog(
+            admin_id=admin_user.id,
+            action="FORCE_VERIFY_STUDENT",
+            target_user_id=user_id,
+            details={"overall_status": "verified"},
+            ip_address=ip_address,
+        )
+        db.add(audit)
+        await db.commit()
+        await db.refresh(iv)
+
+        return AdminActionResponse(
+            success=True,
+            message="Student successfully verified by administrator",
+            overall_status="verified",
+        )
+
+    @staticmethod
+    async def list_internships(
+        db: AsyncSession,
+        stage: str | None = None,
+        status_filter: str | None = None,
+        search: str | None = None,
+        college_id: UUID | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> AdminInternshipListResponse:
+        """
+        List all student internships with filtering for admin oversight.
+        """
+        query = (
+            select(Internship)
+            .join(Internship.user)
+            .outerjoin(User.identity_verification)
+            .options(
+                selectinload(Internship.user)
+                .selectinload(User.identity_verification)
+                .selectinload(IdentityVerification.college),
+            )
+        )
+
+        conditions = []
+        if stage and stage != "all":
+            conditions.append(Internship.verification_stage == stage)
+
+        if status_filter and status_filter != "all":
+            conditions.append(Internship.status == status_filter)
+
+        if college_id:
+            conditions.append(IdentityVerification.college_id == college_id)
+
+        if search:
+            search_pattern = f"%{search}%"
+            conditions.append(
+                or_(
+                    Internship.company_name.ilike(search_pattern),
+                    Internship.role.ilike(search_pattern),
+                    User.name.ilike(search_pattern),
+                    User.email.ilike(search_pattern),
+                    User.registration_number.ilike(search_pattern),
+                )
+            )
+
+        if conditions:
+            query = query.where(and_(*conditions))
+
+        # Count total
+        count_query = select(func.count(Internship.id)).join(Internship.user).outerjoin(User.identity_verification)
+        if conditions:
+            count_query = count_query.where(and_(*conditions))
+        total_res = await db.execute(count_query)
+        total = total_res.scalar() or 0
+
+        # Order by pending first, then newest
+        query = query.order_by(
+            (Internship.status == "pending").desc(),
+            Internship.created_at.desc(),
+        ).offset((page - 1) * page_size).limit(page_size)
+
+        result = await db.execute(query)
+        records = result.scalars().all()
+
+        items = []
+        for r in records:
+            c_name = None
+            if r.user and r.user.identity_verification and r.user.identity_verification.college:
+                c_name = r.user.identity_verification.college.name
+
+            items.append(
+                AdminInternshipItem(
+                    id=r.id,
+                    user_id=r.user_id,
+                    student_name=r.user.name if r.user else "Unknown",
+                    student_email=r.user.email if r.user else "",
+                    student_registration_number=r.user.registration_number if r.user else "",
+                    student_mobile=r.user.mobile_number if r.user else "",
+                    college_name=c_name,
+                    company_name=r.company_name,
+                    role=r.role,
+                    department=r.department,
+                    internship_type=r.internship_type,
+                    location=r.location,
+                    supervisor_name=r.supervisor_name,
+                    supervisor_email=r.supervisor_email,
+                    supervisor_phone=r.supervisor_phone,
+                    start_date=r.start_date,
+                    end_date=r.end_date,
+                    stipend=r.stipend,
+                    offer_letter_url=r.offer_letter_url,
+                    verification_stage=r.verification_stage,
+                    status=r.status,
+                    rejection_reason=r.rejection_reason,
+                    is_active=r.is_active,
+                    created_at=r.created_at,
+                    updated_at=r.updated_at,
+                )
+            )
+
+        return AdminInternshipListResponse(
+            total=total,
+            items=items,
+            page=page,
+            page_size=page_size,
+        )
+
+    @staticmethod
+    async def update_internship_verification(
+        db: AsyncSession,
+        internship_id: UUID,
+        stage: str,
+        status: str | None,
+        rejection_reason: str | None,
+        admin_user: User,
+        ip_address: str | None = None,
+    ) -> AdminActionResponse:
+        """
+        Admin updates an internship's verification stage and status.
+        """
+        stmt = select(Internship).where(Internship.id == internship_id)
+        result = await db.execute(stmt)
+        internship = result.scalar_one_or_none()
+        if not internship:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Internship not found",
+            )
+
+        internship.verification_stage = stage
+        if status:
+            internship.status = status
+        elif stage == "verified":
+            internship.status = "verified"
+        elif stage == "rejected":
+            internship.status = "rejected"
+        else:
+            internship.status = "pending"
+
+        internship.rejection_reason = rejection_reason if stage == "rejected" else None
+
+        audit = AdminAuditLog(
+            admin_id=admin_user.id,
+            action="UPDATE_INTERNSHIP_STAGE",
+            target_user_id=internship.user_id,
+            details={
+                "internship_id": str(internship_id),
+                "company_name": internship.company_name,
+                "verification_stage": stage,
+                "status": internship.status,
+                "rejection_reason": internship.rejection_reason,
+            },
+            ip_address=ip_address,
+        )
+        db.add(audit)
+        await db.commit()
+        await db.refresh(internship)
+
+        return AdminActionResponse(
+            success=True,
+            message=f"Internship {internship.company_name} updated to {stage} ({internship.status})",
+            overall_status=internship.status,
+        )
+
+    @staticmethod
     async def get_analytics_summary(db: AsyncSession) -> AdminAnalyticsSummary:
         """
         Retrieve high-level verification dashboard KPIs.
@@ -294,12 +528,27 @@ class AdminService:
             await db.execute(select(func.count(College.id)).where(College.is_active == True))  # noqa: E712
         ).scalar() or 0
 
+        total_internships = (await db.execute(select(func.count(Internship.id)))).scalar() or 0
+        pending_internships = (
+            await db.execute(
+                select(func.count(Internship.id)).where(Internship.status == "pending")
+            )
+        ).scalar() or 0
+        verified_internships = (
+            await db.execute(
+                select(func.count(Internship.id)).where(Internship.status == "verified")
+            )
+        ).scalar() or 0
+
         return AdminAnalyticsSummary(
             total_users=total_users,
             verified_users=verified_users,
             pending_reviews=pending_reviews,
             rejected_verifications=rejected_verifications,
             active_colleges=active_colleges,
+            total_internships=total_internships,
+            pending_internships=pending_internships,
+            verified_internships=verified_internships,
         )
 
     @staticmethod

@@ -14,7 +14,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import {
   Ionicons,
   Feather,
@@ -76,6 +76,12 @@ export default function InternshipManagementScreen() {
   useEffect(() => {
     fetchInternships();
   }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchInternships();
+    }, [])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -307,20 +313,7 @@ export default function InternshipManagementScreen() {
     }
   };
 
-  const handleSimulateStatus = async (stage: VerificationStage, reason?: string) => {
-    if (!activeInternship) return;
-    try {
-      setActionLoading(true);
-      await api.updateInternshipStatus(activeInternship.id, stage, undefined, reason);
-      setShowSimModal(false);
-      await fetchInternships();
-      Alert.alert('Status Updated', `Internship verification stage updated to: ${stage}`);
-    } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to update verification stage.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
+
 
   // Stage mapping helper
   const getStageStep = (stage: string) => {
@@ -590,16 +583,6 @@ export default function InternshipManagementScreen() {
                 </View>
               )}
 
-              {/* Admin / Stage Demo Simulator Tool */}
-              <TouchableOpacity
-                style={styles.simStageBtn}
-                onPress={() => setShowSimModal(true)}
-                activeOpacity={0.8}
-              >
-                <Feather name="sliders" size={14} color="#6B7280" />
-                <Text style={styles.simStageBtnText}>Test & Simulate Verification Stages</Text>
-                <Feather name="chevron-right" size={14} color="#6B7280" />
-              </TouchableOpacity>
             </View>
 
             {/* List of Internships Section */}
@@ -973,90 +956,6 @@ export default function InternshipManagementScreen() {
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
-      </Modal>
-
-      {/* ============================================================= */}
-      {/* Stage Progression Simulation Modal                            */}
-      {/* ============================================================= */}
-      <Modal visible={showSimModal} animationType="fade" transparent>
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowSimModal(false)}
-        >
-          <View style={styles.simCard}>
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Verification Flow Simulator</Text>
-              <TouchableOpacity onPress={() => setShowSimModal(false)}>
-                <Ionicons name="close-circle" size={24} color="#9CA3AF" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.simDescription}>
-              Simulate admin and mentor progression to test how your internship verification updates dynamically across the app.
-            </Text>
-
-            <TouchableOpacity
-              style={styles.simOption}
-              onPress={() => handleSimulateStatus('submitted')}
-            >
-              <View style={[styles.simDot, { backgroundColor: '#F59E0B' }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.simOptionTitle}>1. Submitted</Text>
-                <Text style={styles.simOptionSub}>Freshly submitted by student, pending T&P review</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.simOption}
-              onPress={() => handleSimulateStatus('tp_review')}
-            >
-              <View style={[styles.simDot, { backgroundColor: '#3B82F6' }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.simOptionTitle}>2. T&P Review Approved</Text>
-                <Text style={styles.simOptionSub}>Forwarded to academic / industry mentor</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.simOption}
-              onPress={() => handleSimulateStatus('mentor_review')}
-            >
-              <View style={[styles.simDot, { backgroundColor: '#8B5CF6' }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.simOptionTitle}>3. Mentor Review</Text>
-                <Text style={styles.simOptionSub}>Mentor evaluating workplace and deliverables</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.simOption}
-              onPress={() => handleSimulateStatus('verified')}
-            >
-              <View style={[styles.simDot, { backgroundColor: '#10B981' }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.simOptionTitle}>4. Officially Verified</Text>
-                <Text style={styles.simOptionSub}>All approvals granted, ready for certified attendance</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.simOption}
-              onPress={() =>
-                handleSimulateStatus(
-                  'rejected',
-                  'Company registration number is not verified with the college approved roster.'
-                )
-              }
-            >
-              <View style={[styles.simDot, { backgroundColor: '#EF4444' }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.simOptionTitle, { color: '#DC2626' }]}>5. Rejected</Text>
-                <Text style={styles.simOptionSub}>Requires corrections or revised offer document</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
       </Modal>
     </SafeAreaView>
   );

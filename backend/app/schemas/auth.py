@@ -110,6 +110,7 @@ class UserBrief(BaseModel):
     id: UUID
     name: str
     email: str
+    role: str = "student"
 
     model_config = {"from_attributes": True}
 

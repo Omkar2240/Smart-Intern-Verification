@@ -331,3 +331,88 @@ async def test_admin_college_crud_and_roster_upload(client: AsyncClient, db_sess
         )
     ).scalars().all()
     assert len(roster_entries) == 2
+
+
+@pytest.mark.asyncio
+async def test_admin_internship_management_and_force_verify(client: AsyncClient, db_session: AsyncSession):
+    # 1. Create superadmin
+    _, admin_token = await create_admin_user(db_session, role="super_admin")
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    # 2. Register student and create internship
+    student_data = {
+        "name": "Intern Student",
+        "email": "intern_student@example.com",
+        "registration_number": "INT2026999",
+        "mobile_number": "9123456789",
+        "password": "StrongPassword@123",
+    }
+    student_reg = await register_user(client, user_data=student_data)
+    student_token = student_reg["access_token"]
+    student_headers = {"Authorization": f"Bearer {student_token}"}
+    student_id = student_reg["user"]["id"]
+
+    # Student registers internship
+    payload = {
+        "company_name": "Tesla Motors",
+        "role": "Autopilot Intern",
+        "department": "AI Vision",
+        "internship_type": "on_site",
+        "location": "Palo Alto HQ",
+        "stipend": "$50/hr",
+    }
+    resp_create = await client.post("/api/v1/internships", json=payload, headers=student_headers)
+    assert resp_create.status_code == 201
+    internship_id = resp_create.json()["id"]
+
+    # 3. Admin lists internships
+    resp_internships = await client.get("/api/v1/admin/internships", headers=admin_headers)
+    assert resp_internships.status_code == 200
+    data = resp_internships.json()
+    assert data["total"] >= 1
+    found = next((i for i in data["items"] if i["id"] == internship_id), None)
+    assert found is not None
+    assert found["company_name"] == "Tesla Motors"
+    assert found["student_name"] == "Intern Student"
+    assert found["verification_stage"] == "submitted"
+
+    # 4. Admin updates internship verification stage to tp_review, then verified
+    resp_update_stage = await client.patch(
+        f"/api/v1/admin/internships/{internship_id}/status",
+        json={"verification_stage": "tp_review"},
+        headers=admin_headers,
+    )
+    assert resp_update_stage.status_code == 200
+    assert resp_update_stage.json()["success"] is True
+
+    # Student checks active internship - should see tp_review
+    resp_student_active = await client.get("/api/v1/internships/active", headers=student_headers)
+    assert resp_student_active.status_code == 200
+    assert resp_student_active.json()["verification_stage"] == "tp_review"
+
+    # Admin marks it verified
+    resp_verify = await client.patch(
+        f"/api/v1/admin/internships/{internship_id}/status",
+        json={"verification_stage": "verified"},
+        headers=admin_headers,
+    )
+    assert resp_verify.status_code == 200
+
+    # Student now sees status verified
+    resp_student_verified = await client.get("/api/v1/internships/active", headers=student_headers)
+    assert resp_student_verified.json()["status"] == "verified"
+    assert resp_student_verified.json()["verification_stage"] == "verified"
+
+    # 5. Admin force-verifies student identity
+    resp_force_verify = await client.post(
+        f"/api/v1/admin/verifications/{student_id}/force-verify",
+        headers=admin_headers,
+    )
+    assert resp_force_verify.status_code == 200
+    assert resp_force_verify.json()["success"] is True
+
+    # Student checks auth status - should reflect is_verified=True
+    resp_me = await client.get("/api/v1/users/me", headers=student_headers)
+    assert resp_me.status_code == 200
+    assert resp_me.json()["is_verified"] is True
+

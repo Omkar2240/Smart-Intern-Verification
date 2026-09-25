@@ -14,6 +14,7 @@ class UserResponse(BaseModel):
     email: str
     registration_number: str
     mobile_number: str
+    role: str = "student"
     is_active: bool
     is_verified: bool
     created_at: datetime

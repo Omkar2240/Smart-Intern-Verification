@@ -36,13 +36,29 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
       try {
         setToken(storedToken);
         const currentUser = await api.getCurrentUser();
-        if (currentUser.role !== "college_admin" && currentUser.role !== "super_admin") {
+        
+        let role = currentUser?.role;
+        // If role is omitted in API response (e.g. backend deployment schema without role), probe admin privileges
+        if (!role) {
+          try {
+            await api.getAnalyticsSummary();
+            role = "college_admin";
+            currentUser.role = role;
+          } catch {
+            api.setToken(null);
+            setUser(null);
+            setToken(null);
+            router.push("/login?error=unauthorized");
+            return;
+          }
+        } else if (role !== "college_admin" && role !== "super_admin" && (role as string) !== "admin") {
           api.setToken(null);
           setUser(null);
           setToken(null);
           router.push("/login?error=unauthorized");
           return;
         }
+
         setUser(currentUser);
       } catch (err) {
         console.error("Failed to restore admin auth session:", err);

@@ -6,6 +6,8 @@ import {
   VerificationListResponse,
   ActionResponse,
   RosterUploadResponse,
+  AdminInternshipItem,
+  AdminInternshipListResponse,
 } from "@/types/admin";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://trackintern-backend.onrender.com/api/v1";
@@ -150,6 +152,61 @@ class ApiClient {
     return this.request<ActionResponse>(`/admin/verifications/${userId}/reset-biometrics`, {
       method: "POST",
     });
+  }
+
+  async forceVerifyStudent(userId: string): Promise<ActionResponse> {
+    return this.request<ActionResponse>(`/admin/verifications/${userId}/force-verify`, {
+      method: "POST",
+    });
+  }
+
+  // Student Internships
+  async getAdminInternships(params: {
+    stage?: string;
+    status?: string;
+    search?: string;
+    college_id?: string;
+    page?: number;
+    page_size?: number;
+  } = {}): Promise<AdminInternshipListResponse> {
+    const query = new URLSearchParams();
+    if (params.stage && params.stage !== "all") query.set("stage", params.stage);
+    if (params.status && params.status !== "all") query.set("status", params.status);
+    if (params.search) query.set("search", params.search);
+    if (params.college_id) query.set("college_id", params.college_id);
+    if (params.page) query.set("page", params.page.toString());
+    if (params.page_size) query.set("page_size", params.page_size.toString());
+
+    const qs = query.toString();
+    return this.request<AdminInternshipListResponse>(`/admin/internships${qs ? `?${qs}` : ""}`);
+  }
+
+  async updateInternshipStatus(
+    internshipId: string,
+    data: {
+      verification_stage: string;
+      status?: string;
+      rejection_reason?: string;
+    }
+  ): Promise<ActionResponse> {
+    return this.request<ActionResponse>(`/admin/internships/${internshipId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getInternshipProofBlob(internshipId: string): Promise<string> {
+    const token = this.getToken();
+    const response = await fetch(`${API_BASE_URL}/admin/internships/${internshipId}/proof`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) {
+      throw new Error("Unable to load offer letter / proof document");
+    }
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
   }
 
   // Colleges & Rosters

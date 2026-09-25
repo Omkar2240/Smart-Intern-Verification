@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   ChevronRight,
   Filter,
+  Briefcase,
 } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
@@ -144,6 +145,48 @@ export default function DashboardPage() {
               icon={Building2}
               color="purple"
             />
+          </div>
+
+          {/* Internship Status Quick Banner */}
+          <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-950/60 via-slate-900 to-slate-900 border border-indigo-500/20 shadow-lg flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                <Briefcase className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  Student Internships & Multi-Stage Verification
+                  <span className="text-[10px] bg-indigo-500/20 text-indigo-300 font-semibold px-2 py-0.5 rounded-full border border-indigo-500/30 uppercase">
+                    Live Mobile Sync
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Review student company postings, verify uploaded offer letters / proof documents, and manage approval stages.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-6 text-xs">
+              <div className="text-right">
+                <span className="text-slate-400 block text-[10px] uppercase font-semibold">Total Internships</span>
+                <span className="text-base font-bold text-white">{analytics?.total_internships ?? 0}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-amber-400 block text-[10px] uppercase font-semibold">Pending Review</span>
+                <span className="text-base font-bold text-amber-400">{analytics?.pending_internships ?? 0}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-emerald-400 block text-[10px] uppercase font-semibold">Verified</span>
+                <span className="text-base font-bold text-emerald-400">{analytics?.verified_internships ?? 0}</span>
+              </div>
+              <a
+                href="/internships"
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs inline-flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 transition-all"
+              >
+                Manage Internships
+                <ChevronRight className="w-3.5 h-3.5" />
+              </a>
+            </div>
           </div>
 
           {/* Verification Review Queue Section */}

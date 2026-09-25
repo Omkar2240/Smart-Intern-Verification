@@ -7,12 +7,16 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 
+from app.schemas.internship import InternshipResponse
+
+
 class AdminVerificationItem(BaseModel):
     user_id: UUID
     user_name: str
     user_email: str
     registration_number: str
     mobile_number: str
+    is_verified: bool = False
     college_id: UUID | None = None
     college_name: str | None = None
     college_status: str
@@ -23,6 +27,7 @@ class AdminVerificationItem(BaseModel):
     rejection_reason: str | None = None
     has_card_image: bool = False
     has_face_embedding: bool = False
+    internships: list[InternshipResponse] = Field(default_factory=list)
     created_at: datetime
     verified_at: datetime | None = None
 
@@ -34,6 +39,49 @@ class AdminVerificationListResponse(BaseModel):
     items: list[AdminVerificationItem]
     page: int = 1
     page_size: int = 20
+
+
+class AdminInternshipItem(BaseModel):
+    id: UUID
+    user_id: UUID
+    student_name: str
+    student_email: str
+    student_registration_number: str
+    student_mobile: str
+    college_name: str | None = None
+    company_name: str
+    role: str
+    department: str | None = None
+    internship_type: str
+    location: str | None = None
+    supervisor_name: str | None = None
+    supervisor_email: str | None = None
+    supervisor_phone: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+    stipend: str | None = None
+    offer_letter_url: str | None = None
+    verification_stage: str
+    status: str
+    rejection_reason: str | None = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminInternshipListResponse(BaseModel):
+    total: int
+    items: list[AdminInternshipItem]
+    page: int = 1
+    page_size: int = 20
+
+
+class AdminInternshipStatusUpdate(BaseModel):
+    verification_stage: str
+    status: str | None = None
+    rejection_reason: str | None = None
 
 
 class AdminRejectRequest(BaseModel):
@@ -89,3 +137,6 @@ class AdminAnalyticsSummary(BaseModel):
     pending_reviews: int
     rejected_verifications: int
     active_colleges: int
+    total_internships: int = 0
+    pending_internships: int = 0
+    verified_internships: int = 0

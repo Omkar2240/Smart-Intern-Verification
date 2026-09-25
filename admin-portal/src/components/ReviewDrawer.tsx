@@ -11,8 +11,14 @@ import {
   ExternalLink,
   ShieldAlert,
   Loader2,
+  Briefcase,
+  FileText,
+  Building,
+  Check,
+  Download,
+  ShieldCheck,
 } from "lucide-react";
-import { VerificationItem } from "@/types/admin";
+import { VerificationItem, InternshipStage } from "@/types/admin";
 import { api } from "@/lib/api";
 
 interface ReviewDrawerProps {
@@ -42,21 +48,30 @@ export function ReviewDrawer({
   const [customReason, setCustomReason] = useState("");
   const [isRejecting, setIsRejecting] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
+  const [isForceVerifying, setIsForceVerifying] = useState(false);
   const [isResettingBio, setIsResettingBio] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [internshipActionId, setInternshipActionId] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
 
   useEffect(() => {
     if (item && item.has_card_image && isOpen) {
       setImageLoading(true);
+      setImageError(null);
       api
         .getCardImageBlob(item.user_id)
         .then((url) => setImageUrl(url))
-        .catch((err) => console.error("Error loading card image:", err))
+        .catch(() => {
+          setImageUrl(null);
+          setImageError("Physical ID card image not found on server storage.");
+        })
         .finally(() => setImageLoading(false));
     } else {
       setImageUrl(null);
+      setImageError(null);
     }
   }, [item, isOpen]);
 
@@ -97,6 +112,39 @@ export function ReviewDrawer({
       setActionError(msg);
     } finally {
       setIsRejecting(false);
+    }
+  };
+
+  const handleForceVerify = async () => {
+    try {
+      setIsForceVerifying(true);
+      setActionError(null);
+      await api.forceVerifyStudent(item.user_id);
+      setSuccessMsg("Student identity successfully verified! Changes are live on their mobile app.");
+      onActionComplete();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Force verification failed";
+      setActionError(msg);
+    } finally {
+      setIsForceVerifying(false);
+    }
+  };
+
+  const handleUpdateInternshipStage = async (internshipId: string, stage: InternshipStage) => {
+    try {
+      setInternshipActionId(internshipId);
+      setActionError(null);
+      await api.updateInternshipStatus(internshipId, {
+        verification_stage: stage,
+        status: stage === "verified" ? "verified" : stage === "rejected" ? "rejected" : "pending",
+      });
+      setSuccessMsg(`Internship stage updated to "${stage}". Live on student mobile app!`);
+      onActionComplete();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to update internship";
+      setActionError(msg);
+    } finally {
+      setInternshipActionId(null);
     }
   };
 
@@ -144,6 +192,13 @@ export function ReviewDrawer({
           </button>
         </div>
 
+        {successMsg && (
+          <div className="mx-6 mt-4 p-3 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>{successMsg}</span>
+          </div>
+        )}
+
         {actionError && (
           <div className="mx-6 mt-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -184,6 +239,12 @@ export function ReviewDrawer({
                   alt="Student College ID"
                   className="w-full h-full object-contain rounded-xl max-h-[420px]"
                 />
+              ) : imageError ? (
+                <div className="flex flex-col items-center gap-2 p-8 text-center text-slate-400">
+                  <ShieldAlert className="w-8 h-8 text-amber-500/80" />
+                  <span className="text-xs font-medium text-amber-400/90">{imageError}</span>
+                  <span className="text-[11px] text-slate-400">Card file was uploaded to local disk or disk was re-initialized</span>
+                </div>
               ) : (
                 <div className="flex flex-col items-center gap-2 p-8 text-center text-slate-400">
                   <ShieldAlert className="w-8 h-8 text-slate-400" />
@@ -311,16 +372,121 @@ export function ReviewDrawer({
           </div>
         </div>
 
+        {/* Registered Internships Section */}
+        <div className="mx-6 mb-6 p-4 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-200 flex items-center gap-2">
+              <Briefcase className="w-4 h-4 text-indigo-400" />
+              Student&apos;s Registered Internships ({item.internships?.length || 0})
+            </span>
+            <span className="text-[10px] text-slate-400">Live Sync With Mobile App</span>
+          </div>
+
+          {!item.internships || item.internships.length === 0 ? (
+            <p className="text-xs text-slate-400 italic py-2">No internships registered yet by this student.</p>
+          ) : (
+            <div className="space-y-3">
+              {item.internships.map((intern) => (
+                <div
+                  key={intern.id}
+                  className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2.5 text-xs"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-white flex items-center gap-1.5 text-sm">
+                        <Building className="w-4 h-4 text-indigo-400" />
+                        {intern.company_name}
+                        {intern.is_active && (
+                          <span className="text-[9px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-1.5 py-0.5 rounded font-semibold uppercase">
+                            Active
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {intern.role} • <span className="capitalize">{intern.internship_type}</span>
+                        {intern.location ? ` • ${intern.location}` : ""}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border capitalize ${
+                        intern.verification_stage === "verified"
+                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                          : intern.verification_stage === "rejected"
+                          ? "bg-rose-500/15 text-rose-400 border-rose-500/30"
+                          : "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                      }`}
+                    >
+                      Stage: {intern.verification_stage.replace("_", " ")}
+                    </span>
+                  </div>
+
+                  {intern.offer_letter_url && (
+                    <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 w-fit">
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>Offer Letter / Email Proof Uploaded</span>
+                    </div>
+                  )}
+
+                  {/* Stage controls */}
+                  <div className="pt-2 border-t border-slate-800/80 flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] text-slate-400 font-medium">Advance Verification:</span>
+                    <button
+                      onClick={() => handleUpdateInternshipStage(intern.id, "tp_review")}
+                      disabled={internshipActionId === intern.id}
+                      className="px-2.5 py-1 rounded-lg bg-blue-500/10 text-blue-300 border border-blue-500/20 text-[11px] hover:bg-blue-500/20 font-semibold transition-colors"
+                    >
+                      T&P Cell
+                    </button>
+                    <button
+                      onClick={() => handleUpdateInternshipStage(intern.id, "mentor_review")}
+                      disabled={internshipActionId === intern.id}
+                      className="px-2.5 py-1 rounded-lg bg-purple-500/10 text-purple-300 border border-purple-500/20 text-[11px] hover:bg-purple-500/20 font-semibold transition-colors"
+                    >
+                      Industry Mentor
+                    </button>
+                    <button
+                      onClick={() => handleUpdateInternshipStage(intern.id, "verified")}
+                      disabled={internshipActionId === intern.id}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[11px] hover:bg-emerald-500/25 font-semibold transition-colors"
+                    >
+                      ✓ Approve
+                    </button>
+                    <button
+                      onClick={() => handleUpdateInternshipStage(intern.id, "rejected")}
+                      disabled={internshipActionId === intern.id}
+                      className="px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[11px] hover:bg-rose-500/20 font-semibold transition-colors"
+                    >
+                      ✕ Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Drawer Action Bar */}
         <div className="p-6 border-t border-slate-800 bg-slate-900/90 sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3">
-          <button
-            onClick={handleResetBiometrics}
-            disabled={isResettingBio || !item.has_face_embedding}
-            className="px-3.5 py-2 rounded-lg border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-40"
-          >
-            {isResettingBio ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-            Reset Biometrics
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleResetBiometrics}
+              disabled={isResettingBio || !item.has_face_embedding}
+              className="px-3.5 py-2 rounded-lg border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-40"
+            >
+              {isResettingBio ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+              Reset Biometrics
+            </button>
+
+            <button
+              onClick={handleForceVerify}
+              disabled={isForceVerifying || item.overall_status === "verified"}
+              className="px-3.5 py-2 rounded-lg bg-indigo-600/20 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-600/30 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-40"
+            >
+              {isForceVerifying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+              Force Verify Student
+            </button>
+          </div>
 
           <div className="flex items-center gap-3">
             <button
