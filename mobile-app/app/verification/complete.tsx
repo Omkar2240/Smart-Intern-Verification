@@ -16,6 +16,10 @@ export default function VerificationCompleteScreen() {
   const router = useRouter();
   const { user, verificationStatus } = useAuth();
 
+  React.useEffect(() => {
+    router.replace('/(tabs)');
+  }, []);
+
   const handleEnterDashboard = () => {
     router.replace('/(tabs)');
   };

@@ -20,9 +20,22 @@ export default function VerificationHubScreen() {
   const { user, verificationStatus, refreshVerificationStatus, logout } = useAuth();
   const [loading, setLoading] = useState(false);
 
+  const isVerificationCompleted = Boolean(
+    verificationStatus?.is_verified ||
+    verificationStatus?.current_step === 'completed' ||
+    verificationStatus?.overall_status === 'verified' ||
+    user?.is_verified
+  );
+
   useEffect(() => {
     refreshVerificationStatus();
   }, []);
+
+  useEffect(() => {
+    if (isVerificationCompleted) {
+      router.replace('/(tabs)');
+    }
+  }, [isVerificationCompleted]);
 
   const getStepNumber = (step?: string) => {
     switch (step) {
@@ -42,6 +55,11 @@ export default function VerificationHubScreen() {
   const currentStepNum = getStepNumber(verificationStatus?.current_step);
 
   const handleContinue = () => {
+    if (isVerificationCompleted || verificationStatus?.current_step === 'completed') {
+      router.replace('/(tabs)');
+      return;
+    }
+
     switch (verificationStatus?.current_step) {
       case 'college_selection':
         router.push('/verification/college' as any);
@@ -51,9 +69,6 @@ export default function VerificationHubScreen() {
         break;
       case 'face':
         router.push('/verification/face' as any);
-        break;
-      case 'completed':
-        router.push('/verification/complete' as any);
         break;
       default:
         router.push('/verification/college' as any);

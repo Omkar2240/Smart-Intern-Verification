@@ -104,7 +104,14 @@ export default function HomeScreen() {
   };
 
   const handleCheckInToggle = () => {
-    if (!verificationStatus?.is_verified) {
+    const isVerified = Boolean(
+      verificationStatus?.is_verified ||
+      verificationStatus?.overall_status === 'verified' ||
+      verificationStatus?.current_step === 'completed' ||
+      user?.is_verified
+    );
+
+    if (!isVerified) {
       Alert.alert(
         'Identity Verification Required',
         'You must complete your one-time identity verification before marking attendance or registering companies.',

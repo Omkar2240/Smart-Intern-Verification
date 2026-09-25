@@ -8,7 +8,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/context/auth-context';
 
 function NavigationGuard() {
-  const { isLoading, isAuthenticated, verificationStatus } = useAuth();
+  const { isLoading, isAuthenticated, verificationStatus, user } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -25,19 +25,26 @@ function NavigationGuard() {
       }
     } else {
       // User is authenticated
-      if (!verificationStatus?.is_verified) {
+      const isVerificationCompleted = Boolean(
+        verificationStatus?.is_verified ||
+        verificationStatus?.current_step === 'completed' ||
+        verificationStatus?.overall_status === 'verified' ||
+        user?.is_verified
+      );
+
+      if (!isVerificationCompleted) {
         // Not verified yet: MUST complete mandatory verification flow
         if (!inVerificationGroup) {
           router.replace('/verification' as any);
         }
       } else {
-        // Identity verified: allow dashboard access
+        // Identity verified: redirect directly to home page
         if (inAuthGroup || inVerificationGroup) {
           router.replace('/(tabs)');
         }
       }
     }
-  }, [isLoading, isAuthenticated, verificationStatus, segments]);
+  }, [isLoading, isAuthenticated, verificationStatus, user, segments]);
 
   return null;
 }
