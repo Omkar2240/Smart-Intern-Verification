@@ -121,6 +121,44 @@ export interface VerificationStepResult {
   extracted_metadata?: Record<string, any>;
 }
 
+export interface Internship {
+  id: string;
+  user_id: string;
+  company_name: string;
+  role: string;
+  department?: string | null;
+  internship_type: 'on_site' | 'remote' | 'hybrid';
+  location?: string | null;
+  supervisor_name?: string | null;
+  supervisor_email?: string | null;
+  supervisor_phone?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  stipend?: string | null;
+  offer_letter_url?: string | null;
+  verification_stage: 'submitted' | 'tp_review' | 'mentor_review' | 'verified' | 'rejected';
+  status: 'pending' | 'verified' | 'rejected';
+  rejection_reason?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InternshipCreatePayload {
+  company_name: string;
+  role: string;
+  department?: string;
+  internship_type?: 'on_site' | 'remote' | 'hybrid';
+  location?: string;
+  supervisor_name?: string;
+  supervisor_email?: string;
+  supervisor_phone?: string;
+  start_date?: string;
+  end_date?: string;
+  stipend?: string;
+  offer_letter_url?: string;
+}
+
 class ApiService {
   private baseUrl = API_BASE_URL;
   private readonly defaultTimeoutMs = 6000; // 6s timeout to prevent hanging
@@ -449,6 +487,102 @@ class ApiService {
 
     return this.request<VerificationStepResult>(
       '/api/v1/verification/face',
+      {
+        method: 'POST',
+        body: formData,
+      },
+      true
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Internship Endpoints
+  // -------------------------------------------------------------------------
+
+  async getInternships(): Promise<Internship[]> {
+    return this.request<Internship[]>('/api/v1/internships', { method: 'GET' }, true);
+  }
+
+  async getActiveInternship(): Promise<Internship | null> {
+    try {
+      return await this.request<Internship | null>('/api/v1/internships/active', { method: 'GET' }, true);
+    } catch {
+      return null;
+    }
+  }
+
+  async createInternship(data: InternshipCreatePayload): Promise<Internship> {
+    return this.request<Internship>(
+      '/api/v1/internships',
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+      true
+    );
+  }
+
+  async updateInternship(id: string, data: Partial<InternshipCreatePayload & { is_active?: boolean }>): Promise<Internship> {
+    return this.request<Internship>(
+      `/api/v1/internships/${id}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      },
+      true
+    );
+  }
+
+  async deleteInternship(id: string): Promise<{ success: boolean; message: string }> {
+    return this.request<{ success: boolean; message: string }>(
+      `/api/v1/internships/${id}`,
+      {
+        method: 'DELETE',
+      },
+      true
+    );
+  }
+
+  async setActiveInternship(id: string): Promise<Internship> {
+    return this.request<Internship>(
+      `/api/v1/internships/${id}/set-active`,
+      {
+        method: 'POST',
+      },
+      true
+    );
+  }
+
+  async updateInternshipStatus(
+    id: string,
+    verification_stage: string,
+    status?: string,
+    rejection_reason?: string
+  ): Promise<Internship> {
+    return this.request<Internship>(
+      `/api/v1/internships/${id}/status`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ verification_stage, status, rejection_reason }),
+      },
+      true
+    );
+  }
+
+  async uploadInternshipProof(
+    fileUri: string,
+    mimeType: string,
+    filename: string
+  ): Promise<{ storage_ref: string; filename: string; content_type: string; url: string }> {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: fileUri,
+      type: mimeType,
+      name: filename,
+    } as any);
+
+    return this.request<{ storage_ref: string; filename: string; content_type: string; url: string }>(
+      '/api/v1/internships/upload-proof',
       {
         method: 'POST',
         body: formData,
