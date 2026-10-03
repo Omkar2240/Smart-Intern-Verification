@@ -125,11 +125,16 @@ class ApiClient {
     const token = this.getToken();
     const response = await fetch(`${API_BASE_URL}/admin/verifications/${userId}/card-image`, {
       headers: {
-        Authorization: `Bearer ${token}`,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     });
     if (!response.ok) {
-      throw new Error("Unable to load card image");
+      let detail = `Server responded with ${response.status}`;
+      try {
+        const errJson = await response.json();
+        if (errJson?.detail) detail = errJson.detail;
+      } catch {}
+      throw new Error(detail);
     }
     const blob = await response.blob();
     return URL.createObjectURL(blob);

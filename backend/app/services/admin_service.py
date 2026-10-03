@@ -150,6 +150,7 @@ class AdminService:
             .options(
                 selectinload(IdentityVerification.user).selectinload(User.face_embeddings),
                 selectinload(IdentityVerification.user).selectinload(User.internships),
+                selectinload(IdentityVerification.user).selectinload(User.profile),
                 selectinload(IdentityVerification.college),
             )
         )

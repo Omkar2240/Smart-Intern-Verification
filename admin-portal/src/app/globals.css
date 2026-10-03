@@ -1,30 +1,160 @@
 @import "tailwindcss";
 
 :root {
-  --background: #090d16;
-  --foreground: #f8fafc;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-border: #e2e8f0;
+  --surface-border-bright: #38bdf8;
+  --cyan-accent: #0284c7;
+  --emerald-accent: #059669;
+  --amber-accent: #d97706;
+  --rose-accent: #e11d48;
 }
 
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
-    Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   overflow-x: hidden;
+  letter-spacing: -0.01em;
 }
 
-/* Custom Scrollbars */
+.font-mono {
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Background Atmosphere (Light Mode) */
+.bg-ambient-glow {
+  background-image:
+    radial-gradient(ellipse 70% 50% at 50% -10%, rgba(2, 132, 199, 0.07), transparent 70%),
+    radial-gradient(circle at 90% 15%, rgba(99, 102, 241, 0.05), transparent 45%),
+    radial-gradient(circle at 10% 85%, rgba(16, 185, 129, 0.04), transparent 45%);
+}
+
+.bg-dot-grid {
+  background-size: 28px 28px;
+  background-image: radial-gradient(circle, rgba(15, 23, 42, 0.06) 1px, transparent 1px);
+}
+
+.bg-circuit-grid {
+  background-image: 
+    linear-gradient(to right, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Glass Panels (Light Mode) */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.04);
+}
+
+.glass-panel-elevated {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 20px 35px -10px rgba(15, 23, 42, 0.08);
+}
+
+.glass-card-interactive {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+}
+
+.glass-card-interactive:hover {
+  transform: translateY(-2px);
+  border-color: #38bdf8;
+  box-shadow: 0 12px 25px -8px rgba(2, 132, 199, 0.12);
+}
+
+/* Scanline / Radar Animation */
+@keyframes scanline {
+  0% {
+    top: -5%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.9;
+  }
+  85% {
+    opacity: 0.9;
+  }
+  100% {
+    top: 105%;
+    opacity: 0;
+  }
+}
+
+.animate-scanline {
+  animation: scanline 2.8s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 3s ease-in-out infinite;
+}
+
+/* Page Entry Animations (Staggered Reveals) */
+@keyframes revealFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-reveal-1 {
+  animation: revealFadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-reveal-2 {
+  animation: revealFadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.08s forwards;
+  opacity: 0;
+}
+
+.animate-reveal-3 {
+  animation: revealFadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.16s forwards;
+  opacity: 0;
+}
+
+.animate-reveal-4 {
+  animation: revealFadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.24s forwards;
+  opacity: 0;
+}
+
+/* Custom Scrollbars (Light Mode) */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0b1120;
+  background: #f1f5f9;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
-  border-radius: 4px;
+  background: #cbd5e1;
+  border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: #94a3b8;
 }

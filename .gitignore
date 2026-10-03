@@ -19,6 +19,13 @@ uploads/
 .vscode/
 .idea/
 
+# Node / JS dependencies
+node_modules/
+.expo/
+dist/
+web-build/
+.next/
+
 # OS
 .DS_Store
 Thumbs.db

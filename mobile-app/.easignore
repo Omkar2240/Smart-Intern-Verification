@@ -1,0 +1,29 @@
+# Dependencies (EAS installs these automatically in the cloud from package.json)
+node_modules/
+
+# Expo & Build outputs
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Git & IDE configs
+.git/
+.vscode/
+.claude/
+.idea/
+
+# Native folders (managed workflow)
+android/
+ios/
+
+# Logs and temp files
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Documentation
+README.md
+CLAUDE.md
+AGENTS.md

@@ -8,7 +8,6 @@ import {
   Eye,
   CheckCircle2,
   XCircle,
-  Clock,
   Building,
   FileText,
   AlertTriangle,
@@ -16,16 +15,10 @@ import {
   ExternalLink,
   Download,
   X,
-  Send,
-  UserCheck,
-  Shield,
-  Layers,
-  MapPin,
-  Calendar,
-  DollarSign,
   Phone,
   Mail,
   AlertCircle,
+  FileCheck,
 } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
@@ -36,33 +29,33 @@ import { useAdminAuth } from "@/context/AdminAuthContext";
 const STAGE_LABELS: Record<string, { label: string; color: string; bg: string; border: string }> = {
   submitted: {
     label: "Submitted",
-    color: "text-amber-400",
-    bg: "bg-amber-500/10",
-    border: "border-amber-500/30",
+    color: "text-amber-800",
+    bg: "bg-amber-50",
+    border: "border-amber-200",
   },
   tp_review: {
-    label: "T&P Cell Review",
-    color: "text-blue-400",
-    bg: "bg-blue-500/10",
-    border: "border-blue-500/30",
+    label: "T&P Cell",
+    color: "text-blue-800",
+    bg: "bg-blue-50",
+    border: "border-blue-200",
   },
   mentor_review: {
     label: "Mentor Review",
-    color: "text-purple-400",
-    bg: "bg-purple-500/10",
-    border: "border-purple-500/30",
+    color: "text-purple-800",
+    bg: "bg-purple-50",
+    border: "border-purple-200",
   },
   verified: {
     label: "Verified",
-    color: "text-emerald-400",
-    bg: "bg-emerald-500/10",
-    border: "border-emerald-500/30",
+    color: "text-emerald-800",
+    bg: "bg-emerald-50",
+    border: "border-emerald-200",
   },
   rejected: {
     label: "Rejected",
-    color: "text-rose-400",
-    bg: "bg-rose-500/10",
-    border: "border-rose-500/30",
+    color: "text-rose-800",
+    bg: "bg-rose-50",
+    border: "border-rose-200",
   },
 };
 
@@ -146,10 +139,12 @@ export default function InternshipsPage() {
       await api.updateInternshipStatus(selectedInternship.id, {
         verification_stage: stage,
         status: status || (stage === "verified" ? "verified" : stage === "rejected" ? "rejected" : "pending"),
-        rejection_reason: stage === "rejected" ? rejectionReason.trim() || "Offer letter or details did not meet requirements." : undefined,
+        rejection_reason:
+          stage === "rejected"
+            ? rejectionReason.trim() || "Offer letter or details did not meet requirements."
+            : undefined,
       });
 
-      // Update current selected item in view
       setSelectedInternship((prev) =>
         prev
           ? {
@@ -160,7 +155,9 @@ export default function InternshipsPage() {
             }
           : null
       );
-      setActionSuccess(`Internship verification stage updated to "${STAGE_LABELS[stage]?.label || stage}". This change is now live on the student's mobile app!`);
+      setActionSuccess(
+        `Internship verification stage updated to "${STAGE_LABELS[stage]?.label || stage}". Live sync dispatched to mobile app!`
+      );
       setShowRejectInput(false);
       fetchInternships();
     } catch (err: any) {
@@ -180,18 +177,18 @@ export default function InternshipsPage() {
   ];
 
   return (
-    <div className="flex min-h-screen bg-slate-950">
+    <div className="flex min-h-screen bg-[#f8fafc] bg-ambient-glow">
       <Sidebar />
 
       <div className="flex-1 flex flex-col min-w-0">
         <Header
-          title="Student Internships & Verifications"
-          description="Review company placements, inspect uploaded offer letter / email proofs, and update multi-stage approval statuses."
+          title="Student Internship Oversight"
+          description="Review industry company placements, inspect offer letters & credentials, and advance multi-stage compliance."
         />
 
         <main className="flex-1 p-8 space-y-6 overflow-y-auto">
           {/* Top Filter and Search Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5">
             <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full">
               {filterTabs.map((tab) => {
                 const isActive = stageFilter === tab.id;
@@ -202,10 +199,10 @@ export default function InternshipsPage() {
                       setStageFilter(tab.id);
                       setPage(1);
                     }}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                    className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
                       isActive
-                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
-                        : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                        ? "bg-gradient-to-r from-sky-600 to-blue-600 text-white shadow-sm border border-sky-600"
+                        : "bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 shadow-xs"
                     }`}
                   >
                     {tab.label}
@@ -216,72 +213,78 @@ export default function InternshipsPage() {
 
             <div className="flex items-center gap-3">
               <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Search student, roll no, company, role..."
+                  placeholder="Search student, roll #, company, role..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="bg-slate-900 border border-slate-800 rounded-xl py-2 pl-9 pr-4 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 w-72"
+                  className="bg-white border border-slate-200 rounded-xl py-2 pl-9 pr-4 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/10 w-72 transition-all shadow-xs"
                 />
               </div>
 
               <button
                 onClick={fetchInternships}
                 disabled={isLoading}
-                title="Refresh"
-                className="p-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 rounded-xl transition-colors disabled:opacity-50"
+                title="Refresh Table"
+                className="p-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl transition-all disabled:opacity-50 cursor-pointer shadow-xs"
               >
-                <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+                <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-sky-600" : ""}`} />
               </button>
             </div>
           </div>
 
           {fetchError && (
-            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center justify-between gap-3">
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
-                <AlertCircle className="w-5 h-5 shrink-0 text-amber-400" />
+                <AlertCircle className="w-5 h-5 shrink-0 text-amber-600" />
                 <div>
                   <p className="font-semibold">Unable to fetch internships: {fetchError}</p>
-                  <p className="text-[11px] text-amber-400/80 mt-0.5">
-                    If connected to Render Cloud, ensure the latest backend with the <code className="bg-slate-900 px-1 py-0.5 rounded">/admin/internships</code> route is pushed and deployed, or point <code className="bg-slate-900 px-1 py-0.5 rounded">admin-portal/.env</code> to your local backend (<code className="bg-slate-900 px-1 py-0.5 rounded">http://localhost:8000/api/v1</code>).
+                  <p className="text-[11px] text-amber-700 mt-0.5">
+                    Ensure the backend service is operational and synced.
                   </p>
                 </div>
               </div>
               <button
                 onClick={fetchInternships}
-                className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 font-medium transition-colors shrink-0"
+                className="px-3 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 font-semibold transition-colors shrink-0 cursor-pointer"
               >
-                Try Again
+                Retry Query
               </button>
             </div>
           )}
 
           {/* Table of Internships */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+          <div className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-xs">
             <table className="w-full text-xs text-left">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 uppercase tracking-wider font-semibold">
+              <thead className="bg-slate-50/80 text-slate-600 border-b border-slate-200 font-mono text-[10px] uppercase tracking-wider font-semibold">
                 <tr>
-                  <th className="py-3.5 px-5">Student & College</th>
-                  <th className="py-3.5 px-5">Company & Role</th>
-                  <th className="py-3.5 px-5">Mode & Location</th>
-                  <th className="py-3.5 px-5">Offer / Email Proof</th>
-                  <th className="py-3.5 px-5">Verification Pipeline</th>
-                  <th className="py-3.5 px-5 text-right">Actions</th>
+                  <th className="py-4 px-6">Student Intern</th>
+                  <th className="py-4 px-6">Company & Role</th>
+                  <th className="py-4 px-6">Mode & Location</th>
+                  <th className="py-4 px-6">Proof Document</th>
+                  <th className="py-4 px-6">Verification Stage</th>
+                  <th className="py-4 px-6 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800">
+              <tbody className="divide-y divide-slate-100">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-16 text-slate-400">
-                      <RefreshCw className="w-6 h-6 animate-spin mx-auto text-indigo-400 mb-2" />
-                      Loading student internships...
+                    <td colSpan={6} className="text-center py-20 text-slate-500">
+                      <div className="w-10 h-10 rounded-xl bg-sky-50 border border-sky-200 flex items-center justify-center mx-auto mb-3">
+                        <RefreshCw className="w-5 h-5 animate-spin text-sky-600" />
+                      </div>
+                      <p className="font-mono text-xs text-slate-700">Loading student internship postings...</p>
                     </td>
                   </tr>
                 ) : internships.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-16 text-slate-400">
-                      No internships found matching your filter criteria.
+                    <td colSpan={6} className="text-center py-20 text-slate-500">
+                      <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto mb-3 text-slate-400">
+                        <Briefcase className="w-5 h-5" />
+                      </div>
+                      <p className="text-xs text-slate-800 font-bold">No internships found</p>
+                      <p className="text-[11px] text-slate-500 mt-1">Adjust the filter parameters to view records.</p>
                     </td>
                   </tr>
                 ) : (
@@ -291,17 +294,19 @@ export default function InternshipsPage() {
                       <tr
                         key={item.id}
                         onClick={() => handleOpenDrawer(item)}
-                        className="hover:bg-slate-800/40 transition-colors cursor-pointer"
+                        className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
                       >
                         {/* Student */}
-                        <td className="py-3.5 px-5">
+                        <td className="py-4 px-6">
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 font-bold text-xs text-indigo-400 flex items-center justify-center shrink-0">
+                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-50 to-sky-100 border border-sky-200 font-bold text-xs text-sky-700 flex items-center justify-center shrink-0 shadow-xs">
                               {item.student_name[0]?.toUpperCase() || "S"}
                             </div>
                             <div>
-                              <p className="font-semibold text-white">{item.student_name}</p>
-                              <p className="text-[11px] text-slate-400">
+                              <p className="font-bold text-slate-900 group-hover:text-sky-600 transition-colors">
+                                {item.student_name}
+                              </p>
+                              <p className="font-mono text-[11px] text-slate-500 mt-0.5">
                                 {item.student_registration_number} • {item.college_name || "Institution"}
                               </p>
                             </div>
@@ -309,57 +314,60 @@ export default function InternshipsPage() {
                         </td>
 
                         {/* Company & Role */}
-                        <td className="py-3.5 px-5">
-                          <p className="font-semibold text-white flex items-center gap-1.5">
-                            <Building className="w-3.5 h-3.5 text-indigo-400" />
+                        <td className="py-4 px-6">
+                          <p className="font-bold text-slate-900 flex items-center gap-2">
+                            <Building className="w-3.5 h-3.5 text-sky-600" />
                             {item.company_name}
                             {item.is_active && (
-                              <span className="text-[9px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-1 py-0.2 rounded font-semibold uppercase">
+                              <span className="font-mono text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-bold uppercase">
                                 Active
                               </span>
                             )}
                           </p>
-                          <p className="text-[11px] text-slate-400">{item.role}</p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">{item.role}</p>
                         </td>
 
                         {/* Mode & Location */}
-                        <td className="py-3.5 px-5 text-slate-300">
-                          <p className="capitalize font-medium">{item.internship_type?.replace("_", "-") || "On-site"}</p>
-                          <p className="text-[11px] text-slate-400">{item.location || "Remote / Unspecified"}</p>
+                        <td className="py-4 px-6 text-slate-700">
+                          <p className="capitalize font-semibold text-slate-900">
+                            {item.internship_type?.replace("_", "-") || "On-site"}
+                          </p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">{item.location || "Remote / Cloud"}</p>
                         </td>
 
                         {/* Offer Letter / Email Proof */}
-                        <td className="py-3.5 px-5">
+                        <td className="py-4 px-6">
                           {item.offer_letter_url ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium text-[11px]">
-                              <FileText className="w-3.5 h-3.5" />
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono text-[11px] font-semibold">
+                              <FileCheck className="w-3.5 h-3.5 text-emerald-600" />
                               Attached
                             </span>
                           ) : (
-                            <span className="text-slate-500 text-[11px] italic">Not Uploaded</span>
+                            <span className="font-mono text-slate-400 text-[11px] italic">Missing</span>
                           )}
                         </td>
 
                         {/* Stage */}
-                        <td className="py-3.5 px-5">
+                        <td className="py-4 px-6">
                           <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] font-semibold ${stageMeta.bg} ${stageMeta.color} ${stageMeta.border}`}
+                            className={`inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full border ${stageMeta.bg} ${stageMeta.color} ${stageMeta.border}`}
                           >
+                            <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
                             {stageMeta.label}
                           </span>
                         </td>
 
                         {/* Action */}
-                        <td className="py-3.5 px-5 text-right">
+                        <td className="py-4 px-6 text-right">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               handleOpenDrawer(item);
                             }}
-                            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs inline-flex items-center gap-1.5 transition-all"
+                            className="px-3.5 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-700 font-semibold text-xs inline-flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
                           >
                             <Eye className="w-3.5 h-3.5" />
-                            Review
+                            Inspect
                           </button>
                         </td>
                       </tr>
@@ -374,114 +382,116 @@ export default function InternshipsPage() {
 
       {/* Review Drawer / Modal */}
       {isDrawerOpen && selectedInternship && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/70 backdrop-blur-sm transition-opacity">
-          <div className="w-full max-w-xl bg-slate-900 border-l border-slate-800 h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-200">
+        <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-xs transition-opacity">
+          <div className="w-full max-w-xl bg-white border-l border-slate-200 h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-200">
             {/* Drawer Header */}
-            <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
+            <div className="p-6 border-b border-slate-200 flex items-center justify-between bg-white/95 sticky top-0 z-20 backdrop-blur-xl">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                <div className="w-10 h-10 rounded-xl bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-600">
                   <Briefcase className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-white">{selectedInternship.company_name}</h3>
-                  <p className="text-xs text-slate-400">{selectedInternship.role}</p>
+                  <h3 className="font-extrabold text-base text-slate-900 tracking-tight">
+                    {selectedInternship.company_name}
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">{selectedInternship.role}</p>
                 </div>
               </div>
               <button
                 onClick={() => setIsDrawerOpen(false)}
-                className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Drawer Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 text-xs">
+            <div className="flex-1 overflow-y-auto p-6 space-y-5 text-xs">
               {actionSuccess && (
-                <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center gap-2.5 font-medium">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
                   <span>{actionSuccess}</span>
                 </div>
               )}
 
               {/* Student Summary Card */}
-              <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                    Student Information
+                  <span className="font-mono text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+                    Student Profile
                   </span>
-                  <span className="text-[11px] text-indigo-400 font-medium">
+                  <span className="font-mono text-[11px] text-sky-700 font-bold">
                     {selectedInternship.college_name || "Institution"}
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-3 pt-1 text-slate-300">
+                <div className="grid grid-cols-2 gap-3 pt-1 text-slate-700">
                   <div>
-                    <span className="text-slate-500 block text-[10px]">Name</span>
-                    <span className="font-semibold text-white">{selectedInternship.student_name}</span>
+                    <span className="text-slate-400 block text-[10px] font-mono">NAME</span>
+                    <span className="font-bold text-slate-900">{selectedInternship.student_name}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px]">Roll / Reg Number</span>
-                    <span className="font-mono text-white">{selectedInternship.student_registration_number}</span>
+                    <span className="text-slate-400 block text-[10px] font-mono">ROLL / REG NO</span>
+                    <span className="font-mono text-sky-700 font-bold">{selectedInternship.student_registration_number}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px]">Email</span>
-                    <span>{selectedInternship.student_email}</span>
+                    <span className="text-slate-400 block text-[10px] font-mono">EMAIL</span>
+                    <span className="truncate block font-medium">{selectedInternship.student_email}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px]">Mobile</span>
-                    <span>{selectedInternship.student_mobile || "—"}</span>
+                    <span className="text-slate-400 block text-[10px] font-mono">CONTACT</span>
+                    <span className="font-medium">{selectedInternship.student_mobile || "—"}</span>
                   </div>
                 </div>
               </div>
 
               {/* Internship Details Card */}
-              <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-                  Internship Details
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <span className="font-mono text-[10px] uppercase font-bold text-slate-500 tracking-wider block">
+                  Placement Parameters
                 </span>
-                <div className="grid grid-cols-2 gap-3 text-slate-300">
+                <div className="grid grid-cols-2 gap-3 text-slate-700">
                   <div>
-                    <span className="text-slate-500 block text-[10px]">Department</span>
-                    <span>{selectedInternship.department || "—"}</span>
+                    <span className="text-slate-400 block text-[10px] font-mono">DEPARTMENT</span>
+                    <span className="font-medium">{selectedInternship.department || "—"}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px]">Work Type</span>
-                    <span className="capitalize">{selectedInternship.internship_type.replace("_", "-")}</span>
+                    <span className="text-slate-400 block text-[10px] font-mono">WORK MODEL</span>
+                    <span className="capitalize font-medium">{selectedInternship.internship_type.replace("_", "-")}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px]">Location</span>
-                    <span>{selectedInternship.location || "Remote / Unspecified"}</span>
+                    <span className="text-slate-400 block text-[10px] font-mono">LOCATION</span>
+                    <span className="font-medium">{selectedInternship.location || "Remote / Unspecified"}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px]">Stipend</span>
-                    <span className="text-amber-400 font-semibold">{selectedInternship.stipend || "Unpaid / N/A"}</span>
+                    <span className="text-slate-400 block text-[10px] font-mono">STIPEND</span>
+                    <span className="font-mono text-amber-700 font-bold">{selectedInternship.stipend || "Unpaid / N/A"}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px]">Start Date</span>
-                    <span>{selectedInternship.start_date || "—"}</span>
+                    <span className="text-slate-400 block text-[10px] font-mono">START DATE</span>
+                    <span className="font-mono font-medium">{selectedInternship.start_date || "—"}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px]">End Date</span>
-                    <span>{selectedInternship.end_date || "—"}</span>
+                    <span className="text-slate-400 block text-[10px] font-mono">END DATE</span>
+                    <span className="font-mono font-medium">{selectedInternship.end_date || "—"}</span>
                   </div>
                 </div>
 
                 {/* Supervisor info */}
-                <div className="pt-2 border-t border-slate-800/80">
-                  <span className="text-slate-500 block text-[10px] mb-1">Company Supervisor</span>
-                  <p className="font-medium text-white">
+                <div className="pt-2.5 border-t border-slate-200">
+                  <span className="text-slate-400 block text-[10px] font-mono mb-1">COMPANY SUPERVISOR</span>
+                  <p className="font-bold text-slate-900">
                     {selectedInternship.supervisor_name || "Not specified"}
                   </p>
                   {(selectedInternship.supervisor_email || selectedInternship.supervisor_phone) && (
-                    <p className="text-[11px] text-slate-400 flex items-center gap-3 mt-0.5">
+                    <p className="text-[11px] text-slate-600 flex items-center gap-3 mt-1 font-mono">
                       {selectedInternship.supervisor_email && (
                         <span className="flex items-center gap-1">
-                          <Mail className="w-3 h-3 text-slate-500" /> {selectedInternship.supervisor_email}
+                          <Mail className="w-3 h-3 text-sky-600" /> {selectedInternship.supervisor_email}
                         </span>
                       )}
                       {selectedInternship.supervisor_phone && (
                         <span className="flex items-center gap-1">
-                          <Phone className="w-3 h-3 text-slate-500" /> {selectedInternship.supervisor_phone}
+                          <Phone className="w-3 h-3 text-sky-600" /> {selectedInternship.supervisor_phone}
                         </span>
                       )}
                     </p>
@@ -490,32 +500,32 @@ export default function InternshipsPage() {
               </div>
 
               {/* Uploaded Offer Letter / Email Proof */}
-              <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <FileText className="w-4 h-4 text-indigo-400" />
-                    Offer Letter / Email Proof Document
+                  <span className="font-mono text-[10px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-sky-600" />
+                    Offer Letter Document Proof
                   </span>
                   {proofBlobUrl && (
                     <a
                       href={proofBlobUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
+                      className="font-mono text-[11px] text-sky-600 hover:text-sky-700 font-bold flex items-center gap-1 transition-colors"
                     >
-                      <ExternalLink className="w-3.5 h-3.5" /> Open Document
+                      <ExternalLink className="w-3.5 h-3.5" /> Open Direct
                     </a>
                   )}
                 </div>
 
                 {loadingProof ? (
-                  <div className="py-8 text-center text-slate-400 flex flex-col items-center gap-2">
-                    <RefreshCw className="w-5 h-5 animate-spin text-indigo-400" />
-                    <span>Loading proof document...</span>
+                  <div className="py-8 text-center text-slate-500 flex flex-col items-center gap-2">
+                    <RefreshCw className="w-5 h-5 animate-spin text-sky-600" />
+                    <span className="font-mono text-xs">Loading verified document stream...</span>
                   </div>
                 ) : proofBlobUrl ? (
                   <div className="space-y-2">
-                    <div className="rounded-xl overflow-hidden border border-slate-800 bg-slate-900 max-h-60 flex items-center justify-center p-2">
+                    <div className="rounded-xl overflow-hidden border border-slate-200 bg-white max-h-60 flex items-center justify-center p-2 shadow-xs">
                       <iframe
                         src={proofBlobUrl}
                         className="w-full h-56 rounded border-0"
@@ -526,24 +536,24 @@ export default function InternshipsPage() {
                       <a
                         href={proofBlobUrl}
                         download={`internship_proof_${selectedInternship.company_name}`}
-                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs inline-flex items-center gap-1.5"
+                        className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs inline-flex items-center gap-2 border border-slate-200 transition-all cursor-pointer shadow-xs"
                       >
-                        <Download className="w-3.5 h-3.5" /> Download Proof Document
+                        <Download className="w-3.5 h-3.5" /> Download Document
                       </a>
                     </div>
                   </div>
                 ) : (
-                  <div className="p-4 rounded-xl bg-slate-900 border border-slate-800/80 text-center text-slate-400">
-                    <AlertTriangle className="w-5 h-5 text-amber-400 mx-auto mb-1" />
-                    <p className="text-xs">No offer letter or proof document uploaded for this internship.</p>
+                  <div className="p-4 rounded-xl bg-white border border-slate-200 text-center text-slate-500">
+                    <AlertTriangle className="w-5 h-5 text-amber-500 mx-auto mb-1" />
+                    <p className="text-xs">No offer letter document uploaded by student.</p>
                   </div>
                 )}
               </div>
 
               {/* Current Pipeline Status Stepper */}
-              <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-                  Verification Workflow Progress
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <span className="font-mono text-[10px] uppercase font-bold text-slate-500 tracking-wider block">
+                  Multi-Stage Verification Stepper
                 </span>
 
                 <div className="grid grid-cols-4 gap-2 text-center text-[10px]">
@@ -570,12 +580,12 @@ export default function InternshipsPage() {
                     return (
                       <div
                         key={step.key}
-                        className={`p-2 rounded-lg border font-medium ${
+                        className={`p-2.5 rounded-xl border font-mono font-bold transition-all ${
                           isCurrent
-                            ? "bg-indigo-600/20 text-indigo-300 border-indigo-500/40 font-bold"
+                            ? "bg-sky-50 text-sky-800 border-sky-300 shadow-xs"
                             : isPassed
-                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                            : "bg-slate-900 text-slate-500 border-slate-800"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-white text-slate-400 border-slate-200"
                         }`}
                       >
                         {step.title}
@@ -585,28 +595,24 @@ export default function InternshipsPage() {
                 </div>
 
                 {selectedInternship.rejection_reason && (
-                  <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs">
-                    <span className="font-semibold block mb-0.5">Rejection Reason:</span>
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs">
+                    <span className="font-bold block mb-0.5">Rejection Reason:</span>
                     {selectedInternship.rejection_reason}
                   </div>
                 )}
               </div>
 
               {/* Admin Action Decision Section */}
-              <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-                  Admin Verification Decisions
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <span className="font-mono text-[10px] uppercase font-bold text-slate-500 tracking-wider block">
+                  Compliance Stage Transitions
                 </span>
-
-                <p className="text-[11px] text-slate-400">
-                  Update the verification stage for this internship. Any change made here will update the database and reflect live on the student&apos;s mobile app in real-time.
-                </p>
 
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <button
                     onClick={() => handleUpdateStage("tp_review")}
                     disabled={actionLoading}
-                    className="p-2.5 rounded-xl bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 text-blue-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                    className="p-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
                   >
                     Move to T&P Cell
                   </button>
@@ -614,7 +620,7 @@ export default function InternshipsPage() {
                   <button
                     onClick={() => handleUpdateStage("mentor_review")}
                     disabled={actionLoading}
-                    className="p-2.5 rounded-xl bg-purple-600/15 hover:bg-purple-600/25 border border-purple-500/30 text-purple-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                    className="p-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
                   >
                     Move to Industry Mentor
                   </button>
@@ -624,45 +630,45 @@ export default function InternshipsPage() {
                   <button
                     onClick={() => handleUpdateStage("verified", "verified")}
                     disabled={actionLoading}
-                    className="w-full p-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all disabled:opacity-50"
+                    className="w-full p-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm shadow-emerald-600/20 transition-all cursor-pointer disabled:opacity-50"
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    Approve & Mark Verified
+                    Approve & Verify Internship
                   </button>
                 </div>
 
                 {/* Reject Option */}
-                <div className="pt-2 border-t border-slate-800">
+                <div className="pt-2 border-t border-slate-200">
                   {!showRejectInput ? (
                     <button
                       onClick={() => setShowRejectInput(true)}
-                      className="text-xs text-rose-400 hover:text-rose-300 font-semibold flex items-center gap-1"
+                      className="text-xs text-rose-600 hover:text-rose-700 font-bold flex items-center gap-1.5 cursor-pointer"
                     >
-                      <XCircle className="w-3.5 h-3.5" /> Reject Internship Submission
+                      <XCircle className="w-3.5 h-3.5" /> Flag / Reject Internship
                     </button>
                   ) : (
-                    <div className="space-y-2 animate-in fade-in duration-150">
-                      <label className="text-[11px] text-rose-400 font-semibold block">
-                        Reason for Rejection (Visible to Student):
+                    <div className="space-y-2.5 animate-in fade-in duration-200">
+                      <label className="font-mono text-[10px] text-rose-600 font-bold uppercase tracking-wider block">
+                        Rejection Justification (Transmitted to Student):
                       </label>
                       <textarea
                         rows={2}
                         value={rejectionReason}
                         onChange={(e) => setRejectionReason(e.target.value)}
-                        placeholder="e.g. Offer letter is expired, company supervisor unverified, or role mismatch..."
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
+                        placeholder="e.g. Offer letter is invalid or expired, company supervisor unverified..."
+                        className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-rose-500 transition-colors shadow-xs"
                       />
                       <div className="flex items-center gap-2 justify-end">
                         <button
                           onClick={() => setShowRejectInput(false)}
-                          className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-200 text-xs font-semibold"
+                          className="px-3.5 py-1.5 rounded-xl bg-slate-100 text-slate-600 hover:text-slate-900 text-xs font-semibold cursor-pointer"
                         >
                           Cancel
                         </button>
                         <button
                           onClick={() => handleUpdateStage("rejected", "rejected")}
                           disabled={actionLoading}
-                          className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs flex items-center gap-1"
+                          className="px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm shadow-rose-600/20 cursor-pointer"
                         >
                           Confirm Rejection
                         </button>

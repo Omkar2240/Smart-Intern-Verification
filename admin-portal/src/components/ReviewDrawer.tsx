@@ -7,19 +7,21 @@ import {
   XCircle,
   RotateCcw,
   AlertTriangle,
-  ZoomIn,
   ExternalLink,
   ShieldAlert,
   Loader2,
   Briefcase,
   FileText,
   Building,
-  Check,
-  Download,
   ShieldCheck,
+  Cpu,
+  Scan,
+  CreditCard,
+  RefreshCw,
 } from "lucide-react";
 import { VerificationItem, InternshipStage } from "@/types/admin";
 import { api } from "@/lib/api";
+import { SmartIdCard } from "@/components/SmartIdCard";
 
 interface ReviewDrawerProps {
   item: VerificationItem | null;
@@ -56,24 +58,51 @@ export function ReviewDrawer({
   const [internshipActionId, setInternshipActionId] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [cardTab, setCardTab] = useState<"smart_card" | "scan">("smart_card");
 
   useEffect(() => {
-    if (item && item.has_card_image && isOpen) {
+    if (item && isOpen) {
       setImageLoading(true);
       setImageError(null);
       api
         .getCardImageBlob(item.user_id)
-        .then((url) => setImageUrl(url))
-        .catch(() => {
+        .then((url) => {
+          setImageUrl(url);
+          setImageError(null);
+          setCardTab("scan");
+        })
+        .catch((err) => {
           setImageUrl(null);
-          setImageError("Physical ID card image not found on server storage.");
+          const msg = err instanceof Error ? err.message : "Physical ID card image not found on storage node";
+          setImageError(msg);
+          setCardTab("smart_card");
         })
         .finally(() => setImageLoading(false));
     } else {
       setImageUrl(null);
       setImageError(null);
+      setCardTab("smart_card");
     }
   }, [item, isOpen]);
+
+  const handleRetryFetch = () => {
+    if (!item) return;
+    setImageLoading(true);
+    setImageError(null);
+    api
+      .getCardImageBlob(item.user_id)
+      .then((url) => {
+        setImageUrl(url);
+        setImageError(null);
+        setCardTab("scan");
+      })
+      .catch((err) => {
+        setImageUrl(null);
+        const msg = err instanceof Error ? err.message : "Physical ID card image not found on storage node";
+        setImageError(msg);
+      })
+      .finally(() => setImageLoading(false));
+  };
 
   if (!isOpen || !item) return null;
 
@@ -168,97 +197,225 @@ export function ReviewDrawer({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/70 backdrop-blur-sm flex justify-end animate-in fade-in duration-200">
-      <div className="w-full max-w-4xl bg-slate-900 border-l border-slate-800 h-full flex flex-col shadow-2xl overflow-y-auto">
+    <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/40 backdrop-blur-xs flex justify-end animate-in fade-in duration-200">
+      <div className="w-full max-w-4xl bg-white border-l border-slate-200 h-full flex flex-col shadow-2xl overflow-y-auto">
         {/* Drawer Header */}
-        <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-900/80 sticky top-0 z-10 backdrop-blur-md">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-                Verification Review
-              </span>
-              <span className="text-xs text-slate-400">ID: {item.user_id.slice(0, 8)}</span>
+        <div className="p-6 border-b border-slate-200 flex items-center justify-between bg-white/95 sticky top-0 z-20 backdrop-blur-xl">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-600">
+              <Scan className="w-5 h-5" />
             </div>
-            <h2 className="text-lg font-bold text-white mt-1">
-              {item.user_name}{" "}
-              <span className="text-sm font-normal text-slate-400">({item.registration_number})</span>
-            </h2>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[9px] font-bold uppercase px-2 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200">
+                  Forensic Review
+                </span>
+                <span className="font-mono text-xs text-slate-500">
+                  UID: <span className="text-slate-800 font-bold">{item.user_id.slice(0, 8)}</span>
+                </span>
+              </div>
+              <h2 className="text-lg font-extrabold text-slate-900 mt-0.5 flex items-center gap-2">
+                {item.user_name}
+                <span className="font-mono text-xs font-normal text-slate-500">
+                  ({item.registration_number || "NO-ROLL"})
+                </span>
+              </h2>
+            </div>
           </div>
+
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+            className="p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
+        {/* Telemetry Notices */}
         {successMsg && (
-          <div className="mx-6 mt-4 p-3 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <div className="mx-6 mt-5 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2.5 font-medium">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
             <span>{successMsg}</span>
           </div>
         )}
 
         {actionError && (
-          <div className="mx-6 mt-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
+          <div className="mx-6 mt-5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2.5 font-medium">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
             <span>{actionError}</span>
           </div>
         )}
 
         {/* Side-by-Side Content */}
         <div className="flex-1 p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Left: Uploaded Card Viewer */}
+          {/* Left: Card Viewer (Smart ID / Physical Scan) */}
           <div className="flex flex-col gap-3">
+            {/* View Mode Segmented Bar */}
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Physical College ID Card
-              </h3>
-              {imageUrl && (
+              <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setCardTab("smart_card")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    cardTab === "smart_card"
+                      ? "bg-white text-slate-900 shadow-xs border border-slate-200/80"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  <CreditCard className="w-3.5 h-3.5 text-sky-600" />
+                  <span>Digitized Smart ID</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCardTab("scan")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    cardTab === "scan"
+                      ? "bg-white text-slate-900 shadow-xs border border-slate-200/80"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  <Scan className="w-3.5 h-3.5 text-slate-600" />
+                  <span>Physical Document Scan</span>
+                  {imageUrl ? (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  ) : imageError ? (
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  ) : null}
+                </button>
+              </div>
+
+              {cardTab === "scan" && imageUrl && (
                 <a
                   href={imageUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-xs text-indigo-400 hover:underline flex items-center gap-1"
+                  className="font-mono text-[11px] text-sky-600 hover:text-sky-700 flex items-center gap-1 font-bold transition-colors"
                 >
-                  <ExternalLink className="w-3.5 h-3.5" /> Full View
+                  <ExternalLink className="w-3.5 h-3.5" /> Full Resolution
                 </a>
               )}
-            </div>
 
-            <div className="relative rounded-xl border border-slate-800 bg-slate-950 flex items-center justify-center min-h-[300px] overflow-hidden group">
-              {imageLoading ? (
-                <div className="flex flex-col items-center gap-2 text-slate-400">
-                  <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
-                  <span className="text-xs">Loading encrypted image...</span>
-                </div>
-              ) : imageUrl ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={imageUrl}
-                  alt="Student College ID"
-                  className="w-full h-full object-contain rounded-xl max-h-[420px]"
-                />
-              ) : imageError ? (
-                <div className="flex flex-col items-center gap-2 p-8 text-center text-slate-400">
-                  <ShieldAlert className="w-8 h-8 text-amber-500/80" />
-                  <span className="text-xs font-medium text-amber-400/90">{imageError}</span>
-                  <span className="text-[11px] text-slate-400">Card file was uploaded to local disk or disk was re-initialized</span>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-2 p-8 text-center text-slate-400">
-                  <ShieldAlert className="w-8 h-8 text-slate-400" />
-                  <span className="text-xs font-medium">No ID card photo file uploaded yet</span>
-                </div>
+              {cardTab === "scan" && !imageUrl && !imageLoading && (
+                <button
+                  type="button"
+                  onClick={handleRetryFetch}
+                  className="font-mono text-[11px] text-slate-600 hover:text-slate-900 flex items-center gap-1 font-semibold transition-colors"
+                >
+                  <RefreshCw className="w-3 h-3" /> Retry
+                </button>
               )}
             </div>
 
-            <div className="text-xs text-slate-400 bg-slate-800/40 p-3 rounded-lg border border-slate-800">
-              <p className="font-semibold text-slate-300 mb-1">Inspector Guidelines:</p>
-              <ul className="list-disc list-inside space-y-0.5">
-                <li>Verify institution emblem and official stamp</li>
-                <li>Check student full name spelling</li>
-                <li>Confirm valid enrollment roll/registration number</li>
+            {/* Tab 1: Digitized Smart ID Card */}
+            {cardTab === "smart_card" && (
+              <div className="flex flex-col gap-2.5">
+                <SmartIdCard item={item} />
+                {imageError && (
+                  <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200 text-amber-800 text-[11px] flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <ShieldAlert className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      Physical document file unmounted on server disk • Displaying verified roster ID
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setCardTab("scan")}
+                      className="font-bold underline hover:text-amber-900 ml-2 shrink-0"
+                    >
+                      Inspect Scan Feed
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tab 2: Physical Document Viewfinder */}
+            {cardTab === "scan" && (
+              <div className="relative rounded-2xl border border-slate-800 bg-slate-950 flex items-center justify-center min-h-[340px] overflow-hidden group shadow-lg">
+                <div className="absolute top-2.5 left-2.5 font-mono text-cyan-400/60 text-xs select-none pointer-events-none">⌜</div>
+                <div className="absolute top-2.5 right-2.5 font-mono text-cyan-400/60 text-xs select-none pointer-events-none">⌝</div>
+                <div className="absolute bottom-2.5 left-2.5 font-mono text-cyan-400/60 text-xs select-none pointer-events-none">⌞</div>
+                <div className="absolute bottom-2.5 right-2.5 font-mono text-cyan-400/60 text-xs select-none pointer-events-none">⌟</div>
+
+                {imageUrl && (
+                  <div className="absolute left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-scanline pointer-events-none z-10 opacity-75" />
+                )}
+
+                {imageLoading ? (
+                  <div className="flex flex-col items-center gap-3 text-slate-400 py-12">
+                    <Loader2 className="w-7 h-7 animate-spin text-cyan-400" />
+                    <span className="font-mono text-xs text-slate-300">Decrypting ID card stream...</span>
+                  </div>
+                ) : imageUrl ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={imageUrl}
+                    alt="Student College ID"
+                    className="w-full h-full object-contain rounded-xl max-h-[420px] p-2"
+                  />
+                ) : imageError ? (
+                  <div className="flex flex-col items-center gap-3 p-8 text-center text-slate-400 max-w-sm">
+                    <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                      <ShieldAlert className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-200">Physical Document Unreachable</h4>
+                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                        The physical scan image uploaded by the student is unavailable on the storage node (e.g. wiped after ephemeral instance restart).
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <button
+                        type="button"
+                        onClick={() => setCardTab("smart_card")}
+                        className="px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-mono text-xs font-bold transition-colors shadow-xs"
+                      >
+                        View Digitized Smart ID
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRetryFetch}
+                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-xs font-bold transition-colors border border-slate-700"
+                      >
+                        Retry Scan
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-3 p-8 text-center text-slate-400">
+                    <ShieldAlert className="w-8 h-8 text-slate-500" />
+                    <span className="text-xs font-medium text-slate-400">No physical ID card upload on file</span>
+                    <button
+                      type="button"
+                      onClick={() => setCardTab("smart_card")}
+                      className="px-3 py-1 rounded bg-slate-800 text-sky-400 font-mono text-xs hover:bg-slate-700"
+                    >
+                      Open Smart ID Card
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Inspector Checklist */}
+            <div className="text-xs text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1.5">
+              <p className="font-mono text-[10px] font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Cpu className="w-3.5 h-3.5 text-sky-600" />
+                Verification Checklist:
+              </p>
+              <ul className="space-y-1 text-[11px] text-slate-600 pl-1">
+                <li className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                  <span>Verify institutional emblem and official registrar signature</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                  <span>Cross-check full name spelling with registration profile</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                  <span>Validate academic session & enrollment roll number</span>
+                </li>
               </ul>
             </div>
           </div>
@@ -266,18 +423,18 @@ export function ReviewDrawer({
           {/* Right: OCR Extracted vs Registered Data */}
           <div className="flex flex-col gap-4">
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  OCR Extracted vs Registered Data
+              <div className="flex items-center justify-between mb-2.5">
+                <h3 className="font-mono text-[10px] uppercase font-bold tracking-wider text-slate-500">
+                  Telemetry Comparison & Match
                 </h3>
                 {confidence !== null && (
                   <span
-                    className={`text-xs font-bold px-2 py-0.5 rounded-full border ${
+                    className={`font-mono text-xs font-extrabold px-2.5 py-0.5 rounded-full border ${
                       confidence >= 80
-                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                         : confidence >= 60
-                        ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
-                        : "bg-rose-500/15 text-rose-400 border-rose-500/30"
+                        ? "bg-amber-50 text-amber-800 border-amber-200"
+                        : "bg-rose-50 text-rose-700 border-rose-200"
                     }`}
                   >
                     Match: {confidence}%
@@ -285,41 +442,41 @@ export function ReviewDrawer({
                 )}
               </div>
 
-              <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950">
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
                 <table className="w-full text-xs text-left">
-                  <thead className="bg-slate-900 border-b border-slate-800 text-slate-400">
+                  <thead className="bg-slate-50 border-b border-slate-200 font-mono text-[10px] uppercase tracking-wider text-slate-600">
                     <tr>
-                      <th className="p-2.5 font-semibold">Field</th>
-                      <th className="p-2.5 font-semibold">User Profile</th>
-                      <th className="p-2.5 font-semibold">OCR Extracted</th>
+                      <th className="p-3 font-bold">Attribute</th>
+                      <th className="p-3 font-bold">Registered</th>
+                      <th className="p-3 font-bold">OCR Parsed</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800">
+                  <tbody className="divide-y divide-slate-100 font-mono text-[11px]">
                     <tr>
-                      <td className="p-2.5 font-medium text-slate-400">Student Name</td>
-                      <td className="p-2.5 font-semibold text-white">{item.user_name}</td>
-                      <td className="p-2.5 text-indigo-300">
+                      <td className="p-3 text-slate-500 font-sans font-medium">Student Name</td>
+                      <td className="p-3 font-bold text-slate-900">{item.user_name}</td>
+                      <td className="p-3 text-sky-700 font-bold">
                         {fields.student_name || "—"}
                       </td>
                     </tr>
                     <tr>
-                      <td className="p-2.5 font-medium text-slate-400">College</td>
-                      <td className="p-2.5 font-semibold text-white">{item.college_name || "—"}</td>
-                      <td className="p-2.5 text-indigo-300">
+                      <td className="p-3 text-slate-500 font-sans font-medium">Institution</td>
+                      <td className="p-3 font-bold text-slate-900">{item.college_name || "—"}</td>
+                      <td className="p-3 text-sky-700 font-bold">
                         {fields.college_name || "—"}
                       </td>
                     </tr>
                     <tr>
-                      <td className="p-2.5 font-medium text-slate-400">Registration #</td>
-                      <td className="p-2.5 font-semibold text-white">{item.registration_number}</td>
-                      <td className="p-2.5 text-indigo-300">
+                      <td className="p-3 text-slate-500 font-sans font-medium">Registration #</td>
+                      <td className="p-3 font-bold text-slate-900">{item.registration_number || "—"}</td>
+                      <td className="p-3 text-sky-700 font-bold">
                         {fields.registration_number || "—"}
                       </td>
                     </tr>
                     <tr>
-                      <td className="p-2.5 font-medium text-slate-400">Department</td>
-                      <td className="p-2.5 text-slate-400">—</td>
-                      <td className="p-2.5 text-indigo-300">
+                      <td className="p-3 text-slate-500 font-sans font-medium">Department</td>
+                      <td className="p-3 text-slate-400">—</td>
+                      <td className="p-3 text-sky-700 font-bold">
                         {fields.department || "—"}
                       </td>
                     </tr>
@@ -328,31 +485,37 @@ export function ReviewDrawer({
               </div>
             </div>
 
-            {/* Verification Status Overview */}
-            <div className="p-3 bg-slate-800/40 rounded-xl border border-slate-800 space-y-2 text-xs">
+            {/* Verification Pipeline Telemetry Status */}
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-xs">
               <div className="flex justify-between items-center">
-                <span className="text-slate-400">College ID Status:</span>
-                <span className="font-semibold capitalize text-amber-400">{item.college_id_status}</span>
+                <span className="text-slate-600">College ID Status:</span>
+                <span className="font-mono text-[11px] font-bold uppercase text-amber-700">
+                  {item.college_id_status}
+                </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-400">Face Biometric Status:</span>
-                <span className="font-semibold capitalize text-emerald-400">{item.face_status}</span>
+                <span className="text-slate-600">Face Biometrics:</span>
+                <span className="font-mono text-[11px] font-bold uppercase text-emerald-700">
+                  {item.face_status}
+                </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-400">Overall Verification:</span>
-                <span className="font-semibold capitalize text-indigo-400">{item.overall_status}</span>
+                <span className="text-slate-600">Overall Pipeline:</span>
+                <span className="font-mono text-[11px] font-bold uppercase text-sky-700">
+                  {item.overall_status}
+                </span>
               </div>
             </div>
 
-            {/* Rejection Panel */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-300">
-                Rejection Reason (if rejecting):
+            {/* Rejection Control */}
+            <div className="space-y-2.5">
+              <label className="font-mono text-[10px] uppercase font-bold tracking-wider text-slate-700 block">
+                Flagging Justification (if rejecting):
               </label>
               <select
                 value={selectedReason}
                 onChange={(e) => setSelectedReason(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:bg-white focus:border-sky-500 transition-colors"
               >
                 {REJECTION_REASONS.map((r) => (
                   <option key={r} value={r}>
@@ -363,58 +526,62 @@ export function ReviewDrawer({
 
               <input
                 type="text"
-                placeholder="Or type custom rejection reason..."
+                placeholder="Or specify custom rejection reason..."
                 value={customReason}
                 onChange={(e) => setCustomReason(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-sky-500 transition-colors"
               />
             </div>
           </div>
         </div>
 
         {/* Registered Internships Section */}
-        <div className="mx-6 mb-6 p-4 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-3">
+        <div className="mx-6 mb-6 p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-3.5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-200 flex items-center gap-2">
-              <Briefcase className="w-4 h-4 text-indigo-400" />
-              Student&apos;s Registered Internships ({item.internships?.length || 0})
+            <span className="font-mono text-xs font-bold text-slate-800 flex items-center gap-2">
+              <Briefcase className="w-4 h-4 text-sky-600" />
+              Registered Student Internships ({item.internships?.length || 0})
             </span>
-            <span className="text-[10px] text-slate-400">Live Sync With Mobile App</span>
+            <span className="font-mono text-[10px] text-sky-700 uppercase tracking-wider font-semibold">
+              Live Cloud Sync
+            </span>
           </div>
 
           {!item.internships || item.internships.length === 0 ? (
-            <p className="text-xs text-slate-400 italic py-2">No internships registered yet by this student.</p>
+            <p className="text-xs text-slate-500 italic py-2">
+              No internship records logged by student in mobile app.
+            </p>
           ) : (
             <div className="space-y-3">
               {item.internships.map((intern) => (
                 <div
                   key={intern.id}
-                  className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2.5 text-xs"
+                  className="p-4 rounded-xl bg-white border border-slate-200/90 space-y-3 text-xs shadow-xs"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="font-semibold text-white flex items-center gap-1.5 text-sm">
-                        <Building className="w-4 h-4 text-indigo-400" />
+                      <p className="font-bold text-slate-900 flex items-center gap-2 text-sm">
+                        <Building className="w-4 h-4 text-sky-600" />
                         {intern.company_name}
                         {intern.is_active && (
-                          <span className="text-[9px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-1.5 py-0.5 rounded font-semibold uppercase">
+                          <span className="font-mono text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded font-bold uppercase">
                             Active
                           </span>
                         )}
                       </p>
-                      <p className="text-xs text-slate-400 mt-0.5">
+                      <p className="text-xs text-slate-500 mt-1">
                         {intern.role} • <span className="capitalize">{intern.internship_type}</span>
                         {intern.location ? ` • ${intern.location}` : ""}
                       </p>
                     </div>
 
                     <span
-                      className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border capitalize ${
+                      className={`font-mono text-[10px] font-extrabold px-3 py-1 rounded-full border uppercase tracking-wider ${
                         intern.verification_stage === "verified"
-                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                           : intern.verification_stage === "rejected"
-                          ? "bg-rose-500/15 text-rose-400 border-rose-500/30"
-                          : "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                          ? "bg-rose-50 text-rose-700 border-rose-200"
+                          : "bg-amber-50 text-amber-800 border-amber-200"
                       }`}
                     >
                       Stage: {intern.verification_stage.replace("_", " ")}
@@ -422,40 +589,42 @@ export function ReviewDrawer({
                   </div>
 
                   {intern.offer_letter_url && (
-                    <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 w-fit">
-                      <FileText className="w-3.5 h-3.5" />
-                      <span>Offer Letter / Email Proof Uploaded</span>
+                    <div className="flex items-center gap-2 text-[11px] text-emerald-700 font-semibold bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 w-fit">
+                      <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Offer Letter / Proof Document Attached</span>
                     </div>
                   )}
 
-                  {/* Stage controls */}
-                  <div className="pt-2 border-t border-slate-800/80 flex items-center gap-2 flex-wrap">
-                    <span className="text-[11px] text-slate-400 font-medium">Advance Verification:</span>
+                  {/* Multi-stage verification controls */}
+                  <div className="pt-2.5 border-t border-slate-100 flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                      Progress Stage:
+                    </span>
                     <button
                       onClick={() => handleUpdateInternshipStage(intern.id, "tp_review")}
                       disabled={internshipActionId === intern.id}
-                      className="px-2.5 py-1 rounded-lg bg-blue-500/10 text-blue-300 border border-blue-500/20 text-[11px] hover:bg-blue-500/20 font-semibold transition-colors"
+                      className="px-3 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-[11px] hover:bg-blue-100 font-semibold transition-all cursor-pointer"
                     >
                       T&P Cell
                     </button>
                     <button
                       onClick={() => handleUpdateInternshipStage(intern.id, "mentor_review")}
                       disabled={internshipActionId === intern.id}
-                      className="px-2.5 py-1 rounded-lg bg-purple-500/10 text-purple-300 border border-purple-500/20 text-[11px] hover:bg-purple-500/20 font-semibold transition-colors"
+                      className="px-3 py-1 rounded-lg bg-purple-50 text-purple-700 border border-purple-200 text-[11px] hover:bg-purple-100 font-semibold transition-all cursor-pointer"
                     >
                       Industry Mentor
                     </button>
                     <button
                       onClick={() => handleUpdateInternshipStage(intern.id, "verified")}
                       disabled={internshipActionId === intern.id}
-                      className="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[11px] hover:bg-emerald-500/25 font-semibold transition-colors"
+                      className="px-3 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] hover:bg-emerald-100 font-bold transition-all cursor-pointer"
                     >
                       ✓ Approve
                     </button>
                     <button
                       onClick={() => handleUpdateInternshipStage(intern.id, "rejected")}
                       disabled={internshipActionId === intern.id}
-                      className="px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[11px] hover:bg-rose-500/20 font-semibold transition-colors"
+                      className="px-3 py-1 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 text-[11px] hover:bg-rose-100 font-bold transition-all cursor-pointer"
                     >
                       ✕ Reject
                     </button>
@@ -467,12 +636,12 @@ export function ReviewDrawer({
         </div>
 
         {/* Drawer Action Bar */}
-        <div className="p-6 border-t border-slate-800 bg-slate-900/90 sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+        <div className="p-6 border-t border-slate-200 bg-white sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
             <button
               onClick={handleResetBiometrics}
               disabled={isResettingBio || !item.has_face_embedding}
-              className="px-3.5 py-2 rounded-lg border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-40"
+              className="px-4 py-2.5 rounded-xl border border-amber-300 text-amber-800 hover:bg-amber-50 text-xs font-semibold flex items-center gap-2 transition-all disabled:opacity-40 cursor-pointer"
             >
               {isResettingBio ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
               Reset Biometrics
@@ -481,10 +650,10 @@ export function ReviewDrawer({
             <button
               onClick={handleForceVerify}
               disabled={isForceVerifying || item.overall_status === "verified"}
-              className="px-3.5 py-2 rounded-lg bg-indigo-600/20 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-600/30 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-40"
+              className="px-4 py-2.5 rounded-xl bg-sky-50 border border-sky-300 text-sky-700 hover:bg-sky-100 text-xs font-semibold flex items-center gap-2 transition-all disabled:opacity-40 cursor-pointer"
             >
               {isForceVerifying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-              Force Verify Student
+              Force Verify Profile
             </button>
           </div>
 
@@ -492,7 +661,7 @@ export function ReviewDrawer({
             <button
               onClick={handleReject}
               disabled={isRejecting}
-              className="px-4 py-2 rounded-lg bg-rose-600/15 border border-rose-500/30 text-rose-400 hover:bg-rose-600/25 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+              className="px-4 py-2.5 rounded-xl bg-rose-50 border border-rose-300 text-rose-700 hover:bg-rose-100 text-xs font-bold flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
             >
               {isRejecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
               Reject Document
@@ -501,10 +670,10 @@ export function ReviewDrawer({
             <button
               onClick={handleApprove}
               disabled={isApproving}
-              className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-lg shadow-emerald-600/25 transition-all disabled:opacity-50"
+              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-extrabold flex items-center gap-2 shadow-md shadow-emerald-600/20 transition-all disabled:opacity-50 cursor-pointer"
             >
               {isApproving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-              Approve Student
+              Approve Verification
             </button>
           </div>
         </div>

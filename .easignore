@@ -1,0 +1,25 @@
+# Exclude other monorepo projects from mobile app build
+backend/
+admin-portal/
+uploads/
+.venv/
+agents/
+references/
+routes/
+
+# Exclude dependencies and build caches
+node_modules/
+.expo/
+dist/
+web-build/
+.next/
+.git/
+.vscode/
+.claude/
+.idea/
+
+# Mobile app internal caches
+mobile-app/node_modules/
+mobile-app/.expo/
+mobile-app/dist/
+mobile-app/web-build/

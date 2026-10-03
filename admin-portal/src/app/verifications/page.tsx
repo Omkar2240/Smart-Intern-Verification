@@ -64,27 +64,27 @@ export default function VerificationsPage() {
   const totalPages = Math.ceil(total / pageSize) || 1;
 
   const tabs = [
-    { id: "manual_review", label: "Needs Review", icon: AlertTriangle },
-    { id: "all", label: "All Submissions", icon: ShieldCheck },
-    { id: "verified", label: "Approved", icon: CheckCircle2 },
-    { id: "rejected", label: "Rejected", icon: XCircle },
-    { id: "pending", label: "In Progress", icon: Clock },
+    { id: "manual_review", label: "Needs Review", icon: AlertTriangle, countColor: "text-amber-600" },
+    { id: "all", label: "All Submissions", icon: ShieldCheck, countColor: "text-sky-600" },
+    { id: "verified", label: "Approved", icon: CheckCircle2, countColor: "text-emerald-600" },
+    { id: "rejected", label: "Flagged / Rejected", icon: XCircle, countColor: "text-rose-600" },
+    { id: "pending", label: "Pending Capture", icon: Clock, countColor: "text-slate-500" },
   ];
 
   return (
-    <div className="flex min-h-screen bg-slate-950">
+    <div className="flex min-h-screen bg-[#f8fafc] bg-ambient-glow">
       <Sidebar />
 
       <div className="flex-1 flex flex-col min-w-0">
         <Header
-          title="Student Verification Review Queue"
-          description="High-priority manual verification console for physical student ID cards and OCR mismatches."
+          title="Verification Oversight Queue"
+          description="High-priority forensic inspection workstation for student ID card OCR, face biometrics, and credentials."
         />
 
         <main className="flex-1 p-8 space-y-6 overflow-y-auto">
-          {/* Status Tabs */}
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
-            <div className="flex items-center gap-2">
+          {/* Status Tabs and Quick Filters */}
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5">
+            <div className="flex flex-wrap items-center gap-2">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = statusFilter === tab.id;
@@ -95,20 +95,20 @@ export default function VerificationsPage() {
                       setStatusFilter(tab.id);
                       setPage(1);
                     }}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                       isActive
-                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
-                        : "bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800"
+                        ? "bg-gradient-to-r from-sky-600 to-blue-600 text-white shadow-sm border border-sky-600"
+                        : "bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-slate-200/90 shadow-xs"
                     }`}
                   >
-                    <Icon className="w-3.5 h-3.5" />
+                    <Icon className={`w-3.5 h-3.5 ${isActive ? "text-white" : tab.countColor}`} />
                     <span>{tab.label}</span>
                   </button>
                 );
               })}
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               {/* College Filter */}
               <div className="relative">
                 <select
@@ -117,9 +117,9 @@ export default function VerificationsPage() {
                     setSelectedCollegeId(e.target.value);
                     setPage(1);
                   }}
-                  className="bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-indigo-500 max-w-[200px]"
+                  className="bg-white border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-700 focus:outline-none focus:border-sky-500 max-w-[210px] font-medium shadow-xs"
                 >
-                  <option value="">All Colleges</option>
+                  <option value="">All Affiliated Colleges</option>
                   {colleges.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
@@ -130,7 +130,7 @@ export default function VerificationsPage() {
 
               {/* Search Bar */}
               <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   placeholder="Search name, roll #, email..."
@@ -139,48 +139,54 @@ export default function VerificationsPage() {
                     setSearch(e.target.value);
                     setPage(1);
                   }}
-                  className="bg-slate-900 border border-slate-800 rounded-xl py-2 pl-9 pr-4 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 w-60"
+                  className="bg-white border border-slate-200 rounded-xl py-2 pl-9 pr-4 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/10 w-64 transition-all shadow-xs"
                 />
               </div>
 
               <button
                 onClick={fetchVerifications}
                 disabled={isLoading}
-                title="Refresh"
-                className="p-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 rounded-xl transition-colors disabled:opacity-50"
+                title="Refresh Table"
+                className="p-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl transition-all disabled:opacity-50 cursor-pointer shadow-xs"
               >
-                <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+                <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-sky-600" : ""}`} />
               </button>
             </div>
           </div>
 
           {/* Records Table */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+          <div className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-xs">
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
-                <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 uppercase tracking-wider font-semibold">
+                <thead className="bg-slate-50/80 text-slate-600 border-b border-slate-200 font-mono text-[10px] uppercase tracking-wider font-semibold">
                   <tr>
-                    <th className="py-3.5 px-5">Student Information</th>
-                    <th className="py-3.5 px-5">College Institution</th>
-                    <th className="py-3.5 px-5">ID Card Photo</th>
-                    <th className="py-3.5 px-5">Face Biometric</th>
-                    <th className="py-3.5 px-5">OCR Extracted Roll #</th>
-                    <th className="py-3.5 px-5">Rejection Reason</th>
-                    <th className="py-3.5 px-5 text-right">Action</th>
+                    <th className="py-4 px-6">Student Intern</th>
+                    <th className="py-4 px-6">Affiliated College</th>
+                    <th className="py-4 px-6">College ID Status</th>
+                    <th className="py-4 px-6">Face Biometrics</th>
+                    <th className="py-4 px-6">OCR Roll # Match</th>
+                    <th className="py-4 px-6">Flagging Reason</th>
+                    <th className="py-4 px-6 text-right">Oversight</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800">
+                <tbody className="divide-y divide-slate-100">
                   {isLoading ? (
                     <tr>
-                      <td colSpan={7} className="text-center py-16 text-slate-400">
-                        <RefreshCw className="w-6 h-6 animate-spin mx-auto text-indigo-400 mb-2" />
-                        Loading queue submissions...
+                      <td colSpan={7} className="text-center py-20 text-slate-500">
+                        <div className="w-10 h-10 rounded-xl bg-sky-50 border border-sky-200 flex items-center justify-center mx-auto mb-3">
+                          <RefreshCw className="w-5 h-5 animate-spin text-sky-600" />
+                        </div>
+                        <p className="font-mono text-xs text-slate-700">Loading queue items...</p>
                       </td>
                     </tr>
                   ) : items.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="text-center py-16 text-slate-400">
-                        No submissions found in this queue.
+                      <td colSpan={7} className="text-center py-20 text-slate-500">
+                        <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto mb-3 text-slate-400">
+                          <ShieldCheck className="w-5 h-5" />
+                        </div>
+                        <p className="text-xs text-slate-800 font-bold">Queue clear</p>
+                        <p className="text-[11px] text-slate-500 mt-1">No submissions currently in this category.</p>
                       </td>
                     </tr>
                   ) : (
@@ -195,72 +201,78 @@ export default function VerificationsPage() {
                             setSelectedItem(item);
                             setIsDrawerOpen(true);
                           }}
-                          className={`hover:bg-slate-800/40 transition-colors cursor-pointer ${
-                            isReview ? "bg-amber-500/5" : ""
+                          className={`hover:bg-slate-50/80 transition-colors cursor-pointer group ${
+                            isReview ? "bg-amber-50/30" : ""
                           }`}
                         >
-                          <td className="py-3.5 px-5">
+                          <td className="py-4 px-6">
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 font-bold text-xs text-indigo-400 flex items-center justify-center shrink-0">
-                                {item.user_name[0]?.toUpperCase()}
+                              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-50 to-sky-100 border border-sky-200 font-bold text-xs text-sky-700 flex items-center justify-center shrink-0 shadow-xs">
+                                {item.user_name[0]?.toUpperCase() || "S"}
                               </div>
                               <div>
-                                <p className="font-semibold text-white">{item.user_name}</p>
-                                <p className="text-[11px] text-slate-400">
-                                  {item.registration_number} • {item.user_email}
+                                <p className="font-bold text-slate-900 group-hover:text-sky-600 transition-colors">
+                                  {item.user_name}
+                                </p>
+                                <p className="font-mono text-[11px] text-slate-500 mt-0.5">
+                                  {item.registration_number || "NO-ROLL"} • {item.user_email}
                                 </p>
                               </div>
                             </div>
                           </td>
 
-                          <td className="py-3.5 px-5 text-slate-300 font-medium">
-                            {item.college_name || "—"}
+                          <td className="py-4 px-6 text-slate-700 font-medium">
+                            {item.college_name || (
+                              <span className="font-mono text-slate-400 italic">Not selected</span>
+                            )}
                           </td>
 
-                          <td className="py-3.5 px-5">
+                          <td className="py-4 px-6">
                             <span
-                              className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border capitalize ${
+                              className={`font-mono text-[10px] font-bold px-2.5 py-1 rounded-lg border uppercase tracking-wider ${
                                 item.college_id_status === "verified"
-                                  ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                   : item.college_id_status === "manual_review"
-                                  ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                                  ? "bg-amber-50 text-amber-800 border-amber-200 animate-pulse"
                                   : item.college_id_status === "rejected"
-                                  ? "bg-rose-500/15 text-rose-400 border-rose-500/30"
-                                  : "bg-slate-500/15 text-slate-400 border-slate-500/30"
+                                  ? "bg-rose-50 text-rose-700 border-rose-200"
+                                  : "bg-slate-100 text-slate-700 border-slate-200"
                               }`}
                             >
                               {item.college_id_status.replace("_", " ")}
                             </span>
                           </td>
 
-                          <td className="py-3.5 px-5">
+                          <td className="py-4 px-6">
                             <span
-                              className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border capitalize ${
+                              className={`font-mono text-[10px] font-bold px-2.5 py-1 rounded-lg border uppercase tracking-wider ${
                                 item.face_status === "verified"
-                                  ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                                  : "bg-slate-500/15 text-slate-400 border-slate-500/30"
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  : "bg-slate-100 text-slate-700 border-slate-200"
                               }`}
                             >
                               {item.face_status.replace("_", " ")}
                             </span>
                           </td>
 
-                          <td className="py-3.5 px-5 font-mono text-indigo-300">
-                            {fields.registration_number || <span className="text-slate-400 font-sans">—</span>}
+                          <td className="py-4 px-6 font-mono text-sky-700 font-bold text-xs">
+                            {fields.registration_number || (
+                              <span className="text-slate-400 font-sans italic">—</span>
+                            )}
                           </td>
 
-                          <td className="py-3.5 px-5 max-w-[200px] truncate text-rose-400">
+                          <td className="py-4 px-6 max-w-[200px] truncate text-rose-600 font-medium">
                             {item.rejection_reason || <span className="text-slate-400">—</span>}
                           </td>
 
-                          <td className="py-3.5 px-5 text-right">
+                          <td className="py-4 px-6 text-right">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedItem(item);
                                 setIsDrawerOpen(true);
                               }}
-                              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs inline-flex items-center gap-1 shadow-md shadow-indigo-600/20 transition-all"
+                              className="px-3.5 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-700 font-semibold text-xs inline-flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
                             >
                               <Eye className="w-3.5 h-3.5" />
                               Inspect
@@ -275,25 +287,25 @@ export default function VerificationsPage() {
             </div>
 
             {/* Pagination Controls */}
-            <div className="p-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+            <div className="p-4.5 border-t border-slate-200 bg-slate-50/50 flex items-center justify-between text-xs text-slate-600 font-mono">
               <span>
-                Showing {items.length} of {total} results
+                Showing {items.length} of {total} records
               </span>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300 hover:text-white disabled:opacity-40"
+                  className="p-2 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 transition-colors cursor-pointer shadow-xs"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="font-semibold text-white">
+                <span className="font-bold text-slate-900 px-2">
                   Page {page} of {totalPages}
                 </span>
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300 hover:text-white disabled:opacity-40"
+                  className="p-2 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 transition-colors cursor-pointer shadow-xs"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>

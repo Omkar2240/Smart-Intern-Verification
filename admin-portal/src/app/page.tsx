@@ -12,8 +12,8 @@ import {
   Eye,
   AlertTriangle,
   ChevronRight,
-  Filter,
   Briefcase,
+  ShieldCheck,
 } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
@@ -71,174 +71,207 @@ export default function DashboardPage() {
     switch (status) {
       case "verified":
         return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-            <CheckCircle2 className="w-3 h-3" /> Verified
+          <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            VERIFIED
           </span>
         );
       case "manual_review":
         return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse">
-            <AlertTriangle className="w-3 h-3" /> Needs Review
+          <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 shadow-xs animate-pulse">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            NEEDS REVIEW
           </span>
         );
       case "rejected":
         return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/30">
-            <XCircle className="w-3 h-3" /> Rejected
+          <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 shadow-xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+            REJECTED
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
-            <Clock className="w-3 h-3" /> Pending
+          <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+            PENDING
           </span>
         );
     }
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-950">
+    <div className="flex min-h-screen bg-[#f8fafc] bg-ambient-glow">
       <Sidebar pendingReviewCount={analytics?.pending_reviews} />
 
       <div className="flex-1 flex flex-col min-w-0">
         <Header
-          title="Executive Verification Dashboard"
-          description="Real-time biometric validation, document OCR compliance, and student status."
+          title="Executive Verification Console"
+          description="Real-time multi-stage biometric validation, OCR confidence telemetry, and enrollment audits."
         />
 
-        <main className="flex-1 p-8 space-y-8 overflow-y-auto">
-          {/* KPI Stat Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <main className="flex-1 p-8 space-y-7 overflow-y-auto">
+          {/* KPI Stat Cards Grid with staggered entry */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 animate-reveal-1">
             <StatCard
-              title="Registered Students"
+              title="Registered Interns"
               value={analytics?.total_users ?? "—"}
               subtitle="All student accounts"
               icon={Users}
-              color="indigo"
+              color="cyan"
             />
             <StatCard
-              title="Verified Interns"
+              title="Verified Profiles"
               value={analytics?.verified_users ?? "—"}
-              subtitle="Completed all 3 steps"
+              subtitle="3-tier validation cleared"
               icon={CheckCircle2}
               color="emerald"
             />
             <StatCard
               title="Pending Reviews"
               value={analytics?.pending_reviews ?? "—"}
-              subtitle="Awaiting manual check"
+              subtitle="Awaiting manual audit"
               icon={Clock}
               color="amber"
-              badge={analytics?.pending_reviews ? "Action Needed" : undefined}
+              badge={analytics?.pending_reviews ? "Queue Active" : undefined}
             />
             <StatCard
-              title="Rejected IDs"
+              title="Flagged IDs"
               value={analytics?.rejected_verifications ?? "—"}
-              subtitle="Flagged or illegible"
+              subtitle="OCR or face mismatch"
               icon={XCircle}
               color="rose"
             />
             <StatCard
-              title="Active Colleges"
+              title="Affiliated Colleges"
               value={analytics?.active_colleges ?? "—"}
-              subtitle="Participating institutions"
+              subtitle="Whitelisted institutions"
               icon={Building2}
-              color="purple"
+              color="indigo"
             />
           </div>
 
-          {/* Internship Status Quick Banner */}
-          <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-950/60 via-slate-900 to-slate-900 border border-indigo-500/20 shadow-lg flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-                <Briefcase className="w-6 h-6" />
+          {/* Internship Status Operations Banner */}
+          <div className="animate-reveal-2 relative p-6 rounded-2xl bg-gradient-to-r from-sky-50 via-white to-indigo-50/40 border border-sky-200/80 shadow-xs overflow-hidden group">
+            <div className="flex flex-wrap items-center justify-between gap-6 relative z-10">
+              <div className="flex items-center gap-4">
+                <div className="w-13 h-13 rounded-2xl bg-sky-100 border border-sky-200 flex items-center justify-center text-sky-600 shadow-xs group-hover:scale-105 transition-transform">
+                  <Briefcase className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
+                      Student Internship & Multi-Stage Oversight
+                    </h3>
+                    <span className="font-mono text-[9px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200 uppercase tracking-wider flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                      Live Mobile Sync
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1 max-w-xl">
+                    Review student company postings, verify uploaded offer letters / proof documents, and manage approval stages with automated anti-tamper checking.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  Student Internships & Multi-Stage Verification
-                  <span className="text-[10px] bg-indigo-500/20 text-indigo-300 font-semibold px-2 py-0.5 rounded-full border border-indigo-500/30 uppercase">
-                    Live Mobile Sync
-                  </span>
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Review student company postings, verify uploaded offer letters / proof documents, and manage approval stages.
-                </p>
-              </div>
-            </div>
 
-            <div className="flex items-center gap-6 text-xs">
-              <div className="text-right">
-                <span className="text-slate-400 block text-[10px] uppercase font-semibold">Total Internships</span>
-                <span className="text-base font-bold text-white">{analytics?.total_internships ?? 0}</span>
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-6 px-4 py-2 rounded-xl bg-white border border-slate-200/80 shadow-xs">
+                  <div className="text-right">
+                    <span className="font-mono text-slate-500 block text-[10px] uppercase font-bold tracking-wider">
+                      Total
+                    </span>
+                    <span className="font-mono text-base font-extrabold text-slate-900">
+                      {analytics?.total_internships ?? 0}
+                    </span>
+                  </div>
+                  <div className="h-7 w-[1px] bg-slate-200" />
+                  <div className="text-right">
+                    <span className="font-mono text-amber-700 block text-[10px] uppercase font-bold tracking-wider">
+                      Pending
+                    </span>
+                    <span className="font-mono text-base font-extrabold text-amber-700">
+                      {analytics?.pending_internships ?? 0}
+                    </span>
+                  </div>
+                  <div className="h-7 w-[1px] bg-slate-200" />
+                  <div className="text-right">
+                    <span className="font-mono text-emerald-700 block text-[10px] uppercase font-bold tracking-wider">
+                      Verified
+                    </span>
+                    <span className="font-mono text-base font-extrabold text-emerald-700">
+                      {analytics?.verified_internships ?? 0}
+                    </span>
+                  </div>
+                </div>
+
+                <a
+                  href="/internships"
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-bold text-xs inline-flex items-center gap-2 shadow-sm shadow-sky-600/20 transition-all cursor-pointer"
+                >
+                  <span>Manage Internships</span>
+                  <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                </a>
               </div>
-              <div className="text-right">
-                <span className="text-amber-400 block text-[10px] uppercase font-semibold">Pending Review</span>
-                <span className="text-base font-bold text-amber-400">{analytics?.pending_internships ?? 0}</span>
-              </div>
-              <div className="text-right">
-                <span className="text-emerald-400 block text-[10px] uppercase font-semibold">Verified</span>
-                <span className="text-base font-bold text-emerald-400">{analytics?.verified_internships ?? 0}</span>
-              </div>
-              <a
-                href="/internships"
-                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs inline-flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 transition-all"
-              >
-                Manage Internships
-                <ChevronRight className="w-3.5 h-3.5" />
-              </a>
             </div>
           </div>
 
           {/* Verification Review Queue Section */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+          <div className="animate-reveal-3 bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-xs">
             {/* Table Action Bar */}
-            <div className="p-5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <span>Student Verification Queue</span>
-                  <span className="text-xs bg-slate-800 text-slate-400 font-semibold px-2 py-0.5 rounded-full">
-                    {totalItems} total
-                  </span>
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Review physical college ID card uploads and OCR confidence matches.
-                </p>
+            <div className="p-5 border-b border-slate-200/80 bg-slate-50/50 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-sky-50 border border-sky-200 text-sky-600">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 tracking-tight">
+                    <span>Identity Verification Queue</span>
+                    <span className="font-mono text-[10px] bg-white text-sky-700 border border-slate-200 font-bold px-2 py-0.5 rounded-full shadow-xs">
+                      {totalItems} records
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Physical student ID card OCR parsing, face embedding comparisons, and institutional whitelist audits.
+                  </p>
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
                 {/* Search Bar */}
                 <div className="relative">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    placeholder="Search by name, email, roll #..."
+                    placeholder="Filter by name, email, roll #..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="bg-slate-950 border border-slate-800 rounded-xl py-2 pl-9 pr-4 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 w-64"
+                    className="bg-white border border-slate-200 rounded-xl py-2 pl-9 pr-4 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/10 w-64 transition-all"
                   />
                 </div>
 
                 {/* Status Filter */}
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-indigo-500"
-                >
-                  <option value="all">All Submissions</option>
-                  <option value="manual_review">Needs Review Only</option>
-                  <option value="verified">Verified Only</option>
-                  <option value="rejected">Rejected Only</option>
-                  <option value="pending">Pending</option>
-                </select>
+                <div className="relative">
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="bg-white border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-700 focus:outline-none focus:border-sky-500 transition-all cursor-pointer font-medium"
+                  >
+                    <option value="all">All Submissions</option>
+                    <option value="manual_review">Needs Review Only</option>
+                    <option value="verified">Verified Only</option>
+                    <option value="rejected">Rejected Only</option>
+                    <option value="pending">Pending</option>
+                  </select>
+                </div>
 
                 {/* Refresh Button */}
                 <button
                   onClick={fetchData}
                   disabled={isLoading}
                   title="Refresh Table"
-                  className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-colors disabled:opacity-50"
+                  className="p-2 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-xl transition-all disabled:opacity-50 cursor-pointer shadow-xs"
                 >
-                  <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+                  <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-sky-600" : ""}`} />
                 </button>
               </div>
             </div>
@@ -246,29 +279,35 @@ export default function DashboardPage() {
             {/* Table */}
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
-                <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 uppercase tracking-wider font-semibold">
+                <thead className="bg-slate-50/80 text-slate-600 border-b border-slate-200 font-mono text-[10px] uppercase tracking-wider font-semibold">
                   <tr>
-                    <th className="py-3 px-5">Student</th>
-                    <th className="py-3 px-5">Institution</th>
-                    <th className="py-3 px-5">College ID</th>
-                    <th className="py-3 px-5">Biometric Face</th>
-                    <th className="py-3 px-5">Overall Status</th>
-                    <th className="py-3 px-5">OCR Confidence</th>
-                    <th className="py-3 px-5 text-right">Actions</th>
+                    <th className="py-3.5 px-6">Student Intern</th>
+                    <th className="py-3.5 px-6">Institution</th>
+                    <th className="py-3.5 px-6">College ID</th>
+                    <th className="py-3.5 px-6">Face Biometrics</th>
+                    <th className="py-3.5 px-6">Pipeline Status</th>
+                    <th className="py-3.5 px-6">OCR Confidence</th>
+                    <th className="py-3.5 px-6 text-right">Oversight</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800">
+                <tbody className="divide-y divide-slate-100">
                   {isLoading ? (
                     <tr>
-                      <td colSpan={7} className="text-center py-12 text-slate-400">
-                        <RefreshCw className="w-6 h-6 animate-spin mx-auto text-indigo-400 mb-2" />
-                        Loading student records...
+                      <td colSpan={7} className="text-center py-16 text-slate-500">
+                        <div className="w-10 h-10 rounded-xl bg-sky-50 border border-sky-200 flex items-center justify-center mx-auto mb-3">
+                          <RefreshCw className="w-5 h-5 animate-spin text-sky-600" />
+                        </div>
+                        <p className="font-mono text-xs text-slate-700">Synchronizing verification telemetry...</p>
                       </td>
                     </tr>
                   ) : verifications.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="text-center py-12 text-slate-400">
-                        No verification records match the current filter.
+                      <td colSpan={7} className="text-center py-16 text-slate-500">
+                        <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto mb-3 text-slate-400">
+                          <Search className="w-5 h-5" />
+                        </div>
+                        <p className="text-xs text-slate-800 font-semibold">No verification records found</p>
+                        <p className="text-[11px] text-slate-500 mt-1">Try adjusting the search query or status filter.</p>
                       </td>
                     </tr>
                   ) : (
@@ -281,69 +320,88 @@ export default function DashboardPage() {
                       return (
                         <tr
                           key={item.user_id}
-                          className="hover:bg-slate-800/40 transition-colors group cursor-pointer"
+                          className="hover:bg-slate-50/80 transition-colors group cursor-pointer"
                           onClick={() => handleOpenReview(item)}
                         >
-                          <td className="py-3.5 px-5">
+                          <td className="py-4 px-6">
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 font-bold text-xs text-indigo-400 flex items-center justify-center shrink-0">
-                                {item.user_name[0]?.toUpperCase()}
+                              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-50 to-sky-100 border border-sky-200 font-bold text-xs text-sky-700 flex items-center justify-center shrink-0 shadow-xs">
+                                {item.user_name[0]?.toUpperCase() || "S"}
                               </div>
                               <div>
-                                <p className="font-semibold text-white group-hover:text-indigo-400 transition-colors">
+                                <p className="font-bold text-slate-900 group-hover:text-sky-600 transition-colors">
                                   {item.user_name}
                                 </p>
-                                <p className="text-[11px] text-slate-400">
-                                  {item.registration_number} • {item.user_email}
+                                <p className="font-mono text-[11px] text-slate-500 mt-0.5">
+                                  {item.registration_number || "NO-ROLL"} • {item.user_email}
                                 </p>
                               </div>
                             </div>
                           </td>
 
-                          <td className="py-3.5 px-5 text-slate-300">
-                            {item.college_name || <span className="text-slate-400">Not selected</span>}
-                          </td>
-
-                          <td className="py-3.5 px-5">
-                            {getStatusBadge(item.college_id_status)}
-                          </td>
-
-                          <td className="py-3.5 px-5">
-                            {getStatusBadge(item.face_status)}
-                          </td>
-
-                          <td className="py-3.5 px-5">
-                            {getStatusBadge(item.overall_status)}
-                          </td>
-
-                          <td className="py-3.5 px-5">
-                            {conf !== null ? (
-                              <span
-                                className={`font-semibold ${
-                                  conf >= 80
-                                    ? "text-emerald-400"
-                                    : conf >= 60
-                                    ? "text-amber-400"
-                                    : "text-rose-400"
-                                }`}
-                              >
-                                {conf}%
-                              </span>
-                            ) : (
-                              <span className="text-slate-400">—</span>
+                          <td className="py-4 px-6 text-slate-700 font-medium">
+                            {item.college_name || (
+                              <span className="font-mono text-slate-400 italic">Not affiliated</span>
                             )}
                           </td>
 
-                          <td className="py-3.5 px-5 text-right">
+                          <td className="py-4 px-6">
+                            {getStatusBadge(item.college_id_status)}
+                          </td>
+
+                          <td className="py-4 px-6">
+                            {getStatusBadge(item.face_status)}
+                          </td>
+
+                          <td className="py-4 px-6">
+                            {getStatusBadge(item.overall_status)}
+                          </td>
+
+                          <td className="py-4 px-6">
+                            {conf !== null ? (
+                              <div className="space-y-1.5 w-24">
+                                <div className="flex items-center justify-between font-mono text-[11px]">
+                                  <span
+                                    className={`font-bold ${
+                                      conf >= 80
+                                        ? "text-emerald-700"
+                                        : conf >= 60
+                                        ? "text-amber-700"
+                                        : "text-rose-700"
+                                    }`}
+                                  >
+                                    {conf}%
+                                  </span>
+                                  <span className="text-[9px] text-slate-400 uppercase">Match</span>
+                                </div>
+                                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
+                                  <div
+                                    className={`h-full rounded-full ${
+                                      conf >= 80
+                                        ? "bg-emerald-500"
+                                        : conf >= 60
+                                        ? "bg-amber-500"
+                                        : "bg-rose-500"
+                                    }`}
+                                    style={{ width: `${conf}%` }}
+                                  />
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="font-mono text-slate-400 text-xs">—</span>
+                            )}
+                          </td>
+
+                          <td className="py-4 px-6 text-right">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleOpenReview(item);
                               }}
-                              className="px-3 py-1.5 rounded-lg bg-indigo-600/15 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 font-semibold text-xs inline-flex items-center gap-1 transition-all"
+                              className="px-3.5 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-700 font-semibold text-xs inline-flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
                             >
                               <Eye className="w-3.5 h-3.5" />
-                              Review
+                              <span>Inspect</span>
                             </button>
                           </td>
                         </tr>

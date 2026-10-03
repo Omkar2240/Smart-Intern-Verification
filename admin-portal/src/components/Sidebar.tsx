@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import Link from "next/navigation";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -10,8 +9,9 @@ import {
   Users,
   Clock,
   LogOut,
-  Sparkles,
   Briefcase,
+  Terminal,
+  Activity,
 } from "lucide-react";
 import { useAdminAuth } from "@/context/AdminAuthContext";
 
@@ -20,6 +20,7 @@ interface NavItem {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   badge?: number | string;
+  tag?: string;
 }
 
 export function Sidebar({ pendingReviewCount }: { pendingReviewCount?: number }) {
@@ -39,7 +40,7 @@ export function Sidebar({ pendingReviewCount }: { pendingReviewCount?: number })
       badge: pendingReviewCount && pendingReviewCount > 0 ? pendingReviewCount : undefined,
     },
     {
-      label: "Student Internships",
+      label: "Internships",
       href: "/internships",
       icon: Briefcase,
     },
@@ -57,32 +58,46 @@ export function Sidebar({ pendingReviewCount }: { pendingReviewCount?: number })
       label: "Attendance Audits",
       href: "/attendance",
       icon: Clock,
+      tag: "Live",
     },
   ];
 
   return (
-    <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col h-screen sticky top-0 text-slate-200">
+    <aside className="w-64 bg-white/95 backdrop-blur-2xl border-r border-slate-200 flex flex-col h-screen sticky top-0 text-slate-700 z-30 select-none shadow-sm">
       {/* Brand Header */}
-      <div className="h-16 flex items-center px-6 border-b border-slate-800 gap-3">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-          <Sparkles className="w-5 h-5 text-white" />
+      <div className="h-20 flex items-center px-6 border-b border-slate-200 gap-3.5 relative overflow-hidden bg-white">
+        <div className="relative">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-600 flex items-center justify-center shadow-md shadow-sky-500/20 ring-1 ring-black/5">
+            <Terminal className="w-5 h-5 text-white" />
+          </div>
+          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white" />
         </div>
-        <div>
-          <h1 className="font-bold text-sm tracking-tight text-white flex items-center gap-1.5">
-            TrackIntern
-            <span className="text-[10px] font-semibold uppercase bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded border border-indigo-500/30">
-              Admin
+
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="font-extrabold text-sm tracking-tight text-slate-900">
+              Track<span className="text-sky-600">Intern</span>
             </span>
-          </h1>
-          <p className="text-[11px] text-slate-400">Identity & Attendance</p>
+            <span className="font-mono text-[9px] uppercase px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 font-bold border border-sky-200">
+              v2.4
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+            <p className="font-mono text-[10px] text-slate-500 tracking-wide uppercase font-semibold">
+              Ops Command
+            </p>
+          </div>
         </div>
       </div>
 
       {/* Navigation Links */}
-      <div className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
-        <div className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-          Main Console
+      <div className="flex-1 py-5 px-3 space-y-1.5 overflow-y-auto">
+        <div className="px-3 pb-2 text-[10px] font-mono font-bold uppercase tracking-widest text-slate-400 flex items-center justify-between">
+          <span>Oversight Modules</span>
+          <Activity className="w-3 h-3 text-slate-400" />
         </div>
+
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;
@@ -90,48 +105,63 @@ export function Sidebar({ pendingReviewCount }: { pendingReviewCount?: number })
             <a
               key={item.href}
               href={item.href}
-              className={`flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all group ${
+              className={`relative flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all group ${
                 isActive
-                  ? "bg-indigo-600/15 text-indigo-400 border border-indigo-500/30 font-semibold"
-                  : "text-slate-400 hover:text-slate-100 hover:bg-slate-800/60"
+                  ? "bg-sky-50 text-sky-700 border border-sky-200/80 shadow-sm font-semibold"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 border border-transparent"
               }`}
             >
+              {/* Active indicator bar */}
+              {isActive && (
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-gradient-to-b from-sky-500 to-blue-600 rounded-r-full" />
+              )}
+
               <div className="flex items-center gap-3">
                 <Icon
-                  className={`w-4 h-4 transition-colors ${
-                    isActive ? "text-indigo-400" : "text-slate-400 group-hover:text-slate-200"
+                  className={`w-4 h-4 transition-transform duration-200 group-hover:scale-110 ${
+                    isActive ? "text-sky-600" : "text-slate-400 group-hover:text-slate-700"
                   }`}
                 />
-                <span>{item.label}</span>
+                <span className="tracking-tight">{item.label}</span>
               </div>
-              {item.badge !== undefined && (
-                <span className="text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30 font-semibold px-2 py-0.5 rounded-full">
-                  {item.badge}
-                </span>
-              )}
+
+              <div className="flex items-center gap-1.5">
+                {item.tag && (
+                  <span className="font-mono text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
+                    {item.tag}
+                  </span>
+                )}
+                {item.badge !== undefined && (
+                  <span className="font-mono text-[10px] bg-amber-50 text-amber-800 border border-amber-200 font-bold px-2 py-0.5 rounded-full shadow-sm animate-pulse">
+                    {item.badge}
+                  </span>
+                )}
+              </div>
             </a>
           );
         })}
       </div>
 
-      {/* Admin User Footer */}
-      <div className="p-4 border-t border-slate-800 bg-slate-900/50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-xs text-indigo-400 shrink-0">
+      {/* Admin User Telemetry Footer */}
+      <div className="p-3.5 border-t border-slate-200 bg-slate-50/80">
+        <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200/80 shadow-xs">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center font-bold text-xs text-white shadow-xs shrink-0">
               {user?.name?.[0]?.toUpperCase() || "A"}
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-white truncate">{user?.name || "Admin"}</p>
-              <p className="text-[11px] text-slate-400 capitalize truncate">
-                {user?.role?.replace("_", " ") || "Administrator"}
+              <p className="text-xs font-bold text-slate-900 truncate leading-tight">
+                {user?.name || "Console Operator"}
+              </p>
+              <p className="font-mono text-[10px] text-sky-600 truncate uppercase tracking-wider font-semibold">
+                {user?.role?.replace("_", " ") || "Super Admin"}
               </p>
             </div>
           </div>
           <button
             onClick={logout}
-            title="Sign Out"
-            className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+            title="Terminate Session"
+            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
           </button>
