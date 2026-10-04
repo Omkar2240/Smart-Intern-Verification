@@ -980,21 +980,24 @@ admin-portal/src/
 ---
 
 **Last Updated:** 2026-10-04
-**Version:** 2.0 — Full Implementation Complete
+**Version:** 2.0 — Full Implementation Complete ✅
 
 ---
 
 ## ✅ Implementation Progress Log
 
+> **Build Status:** ✅ `pnpm build` passes with **0 TypeScript errors**. All 10 routes compile successfully.
+
 ### ✅ Phase 1: Foundation Setup — COMPLETE
-- [x] `src/types/admin.types.ts` — AdminRole, AdminUser, AdminUserExtended, AdminUserCreate types
-- [x] `src/types/department.types.ts` — Department, DepartmentWithStats, DepartmentCreate, DepartmentUpdate
-- [x] `src/types/common.types.ts` — Pagination, Filter, ApiResponse, PaginatedResponse
-- [x] `src/types/index.ts` — Barrel export (re-exports legacy admin.ts + new files)
-- [x] `src/constants/roles.constants.ts` — ROLE, ROLE_LABELS, ROLE_COLORS, ROLE_PERMISSIONS, ROLE_NAVIGATION, CAN_CREATE_ROLES
-- [x] `src/constants/status.constants.ts` — VERIFICATION_STATUS, INTERNSHIP_STAGE, USER_STATUS, STATUS_LABELS, STATUS_COLORS
-- [x] `src/constants/api.constants.ts` — API_BASE_URL, API_ENDPOINTS, ERROR_CODES, HTTP_STATUS
-- [x] `src/constants/validation.constants.ts` — FIELD_LENGTHS, VALIDATION_RULES, ERROR_MESSAGES
+- [x] `src/types/admin.ts` — Updated AdminUser with `department_admin` role + `college_id`, `department_id`, `college_name`, `department_name`, `is_active`, `last_login` fields
+- [x] `src/types/admin.types.ts` — `AdminRole`, `AdminAssignment`, `AdminUserExtended`, `AdminUserCreate`, `AdminUserUpdate`
+- [x] `src/types/department.types.ts` — `Department`, `DepartmentWithStats`, `DepartmentCreate`, `DepartmentUpdate`
+- [x] `src/types/common.types.ts` — `Pagination`, `Filter`, `Sort`, `ApiResponse`, `PaginatedResponse`
+- [x] `src/types/index.ts` — Barrel export (re-exports `admin.ts` as primary + named exports from new files to avoid conflicts)
+- [x] `src/constants/roles.constants.ts` — `ROLE`, `ROLE_LABELS`, `ROLE_COLORS`, `ROLE_PERMISSIONS`, `ROLE_NAVIGATION`, `CAN_CREATE_ROLES`
+- [x] `src/constants/status.constants.ts` — `VERIFICATION_STATUS`, `INTERNSHIP_STAGE`, `USER_STATUS`, `STATUS_LABELS`, `STATUS_COLORS`
+- [x] `src/constants/api.constants.ts` — `API_BASE_URL`, `API_ENDPOINTS`, `ERROR_CODES`, `HTTP_STATUS`
+- [x] `src/constants/validation.constants.ts` — `FIELD_LENGTHS`, `VALIDATION_RULES`, `ERROR_MESSAGES`
 - [x] `src/constants/index.ts` — Barrel export
 - [x] `src/data/mock/colleges.mock.ts` — 3 colleges (GHRCE, VNIT, YCCE)
 - [x] `src/data/mock/departments.mock.ts` — 6 departments across 3 colleges
@@ -1003,34 +1006,51 @@ admin-portal/src/
 - [x] `src/data/mock/index.ts` — Barrel export
 
 ### ✅ Phase 2: Mock API Service — COMPLETE
-- [x] `src/lib/mockApi.ts` — MockApiClient with getDepartments, createDepartment, updateDepartment, getAdminUsers, createAdminUser, toggleAdminStatus, getColleges, getAnalyticsByRole
+- [x] `src/lib/mockApi.ts` — `MockApiClient` with in-memory state:
+  - `getColleges(search?)` 
+  - `getDepartments(collegeId?)` — scoped by college for college_admin
+  - `createDepartment(data)` — adds to in-memory store
+  - `updateDepartment(id, data)`
+  - `getAdminUsers(collegeId?)` — scoped by college for college_admin
+  - `createAdminUser(data)` — email uniqueness check, resolves college/dept names
+  - `toggleAdminStatus(userId)` — flips is_active
+  - `getAnalyticsByRole(role)` — returns role-scoped analytics
 
 ### ✅ Phase 3: Admin Components — COMPLETE
 - [x] `src/components/admin/RoleBadge.tsx` — Role badge with icon (Shield/Building2/GraduationCap) and color
-- [x] `src/components/admin/DepartmentCard.tsx` — Card with stats, HOD info, edit button
-- [x] `src/components/admin/AdminUserCard.tsx` — Card with role badge, status, toggle button
-- [x] `src/components/admin/ScopeIndicator.tsx` — College/department scope display
+- [x] `src/components/admin/DepartmentCard.tsx` — Card with stats, HOD info, code badge, edit button
+- [x] `src/components/admin/AdminUserCard.tsx` — Card with role badge, status, activate/deactivate toggle
+- [x] `src/components/admin/ScopeIndicator.tsx` — College/department scope display badges
 - [x] `src/components/admin/index.ts` — Barrel export
 
 ### ✅ Phase 4: Form Components — COMPLETE
-- [x] `src/components/forms/CreateDepartmentModal.tsx` — College dropdown, name, code, HOD fields, validation
-- [x] `src/components/forms/CreateAdminModal.tsx` — Dynamic role/college/department dropdowns, password, validation
+- [x] `src/components/forms/CreateDepartmentModal.tsx` — College dropdown (or locked for college_admin), name, code, HOD name/email, validation
+- [x] `src/components/forms/CreateAdminModal.tsx` — Dynamic role dropdown (super_admin only), college dropdown (or locked), department dropdown (filtered by college, only for dept_admin), password, validation
 - [x] `src/components/forms/index.ts` — Barrel export
 
 ### ✅ Phase 5: New Pages — COMPLETE
-- [x] `src/app/departments/page.tsx` — Search, grid, role-based access, create modal, empty state
-- [x] `src/app/admin-users/page.tsx` — Search, role summary banner, grid, toggle status, create modal
+- [x] `src/app/departments/page.tsx` — Search by name/code/college/HOD, refresh, Add Department button (role-gated), responsive grid, access-denied guard, empty state
+- [x] `src/app/admin-users/page.tsx` — Search, role summary banner (3 counts), responsive grid, toggle status, Create Admin button (role-gated), access-denied guard, empty state
 
 ### ✅ Phase 6: Existing Files Updated — COMPLETE
-- [x] `src/context/AdminAuthContext.tsx` — Added collegeId, departmentId to context; added department_admin to allowed roles
-- [x] `src/components/Sidebar.tsx` — Role-based navigation filtering via ROLE_NAVIGATION constants; added Departments + Admin Users nav items
+- [x] `src/context/AdminAuthContext.tsx`
+  - Added `department_admin` to allowed roles list (prevents unauthorized redirect)
+  - Added `collegeId: string | null` and `departmentId: string | null` to context
+  - Both are derived from `user.college_id` / `user.department_id` for convenient access
+- [x] `src/components/Sidebar.tsx`
+  - Refactored to use `ALL_NAV_ITEMS` array + `ROLE_NAVIGATION` filtering
+  - Added **Departments** (`/departments`, GraduationCap icon)
+  - Added **Admin Users** (`/admin-users`, Shield icon)
+  - Super Admin: all 8 nav items visible
+  - College Admin: no Colleges page, has Departments + Admin Users
+  - Department Admin: only Dashboard, Review Queue, Internships, Students, Attendance
 
 ### 🔲 Remaining / Future Work
-- [ ] Edit Department modal (EditDepartmentModal.tsx)
-- [ ] UI components: Modal.tsx, Badge.tsx, EmptyState.tsx, Button.tsx, Input.tsx, Select.tsx (currently using inline styling)
-- [ ] Dashboard: Add scope indicator banner + role-specific analytics
-- [ ] Connect real backend API endpoints for departments and admin users
-- [ ] Implement Zod schema validation files (admin.schemas.ts, department.schemas.ts, user.schemas.ts)
-- [ ] Add validation helper functions (src/lib/validations.ts)
-- [ ] Add unit tests and E2E tests
-- [ ] Loading skeleton components for better UX
+- [ ] Edit Department modal (`EditDepartmentModal.tsx`)
+- [ ] Dashboard: Role-scoped analytics via `mockApi.getAnalyticsByRole()` + `ScopeIndicator` banner
+- [ ] Reusable UI primitives: `Modal.tsx`, `Badge.tsx`, `EmptyState.tsx`, `Button.tsx`, `Input.tsx`, `Select.tsx`
+- [ ] Zod validation schemas: `src/schemas/` folder
+- [ ] Validation helper functions: `src/lib/validations.ts`
+- [ ] Connect real backend API for departments and admin users (swap `mockApi` → `api`)
+- [ ] Unit and E2E tests
+- [ ] Loading skeleton components
