@@ -9,6 +9,10 @@ interface AdminAuthContextType {
   user: AdminUser | null;
   token: string | null;
   isLoading: boolean;
+  /** Shortcut: current user's college_id (null for super_admin) */
+  collegeId: string | null;
+  /** Shortcut: current user's department_id (null unless department_admin) */
+  departmentId: string | null;
   login: (token: string, user: AdminUser) => void;
   logout: () => void;
 }
@@ -36,9 +40,9 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
       try {
         setToken(storedToken);
         const currentUser = await api.getCurrentUser();
-        
+
         let role = currentUser?.role;
-        // If role is omitted in API response (e.g. backend deployment schema without role), probe admin privileges
+        // If role is omitted in API response, probe admin privileges
         if (!role) {
           try {
             await api.getAnalyticsSummary();
@@ -51,7 +55,12 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
             router.push("/login?error=unauthorized");
             return;
           }
-        } else if (role !== "college_admin" && role !== "super_admin" && (role as string) !== "admin") {
+        } else if (
+          role !== "college_admin" &&
+          role !== "super_admin" &&
+          role !== "department_admin" &&
+          (role as string) !== "admin"
+        ) {
           api.setToken(null);
           setUser(null);
           setToken(null);
@@ -90,8 +99,12 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     router.push("/login");
   };
 
+  // Derived scope fields for convenience
+  const collegeId = user?.college_id ?? null;
+  const departmentId = user?.department_id ?? null;
+
   return (
-    <AdminAuthContext.Provider value={{ user, token, isLoading, login, logout }}>
+    <AdminAuthContext.Provider value={{ user, token, isLoading, collegeId, departmentId, login, logout }}>
       {children}
     </AdminAuthContext.Provider>
   );

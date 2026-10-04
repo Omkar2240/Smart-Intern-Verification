@@ -12,8 +12,11 @@ import {
   Briefcase,
   Terminal,
   Activity,
+  GraduationCap,
+  Shield,
 } from "lucide-react";
 import { useAdminAuth } from "@/context/AdminAuthContext";
+import { ROLE_NAVIGATION } from "@/constants/roles.constants";
 
 interface NavItem {
   label: string;
@@ -23,44 +26,65 @@ interface NavItem {
   tag?: string;
 }
 
+const ALL_NAV_ITEMS: NavItem[] = [
+  {
+    label: "Dashboard",
+    href: "/",
+    icon: LayoutDashboard,
+  },
+  {
+    label: "Review Queue",
+    href: "/verifications",
+    icon: ShieldCheck,
+  },
+  {
+    label: "Internships",
+    href: "/internships",
+    icon: Briefcase,
+  },
+  {
+    label: "Colleges & Rosters",
+    href: "/colleges",
+    icon: Building2,
+  },
+  {
+    label: "Departments",
+    href: "/departments",
+    icon: GraduationCap,
+  },
+  {
+    label: "Admin Users",
+    href: "/admin-users",
+    icon: Shield,
+  },
+  {
+    label: "Student Directory",
+    href: "/students",
+    icon: Users,
+  },
+  {
+    label: "Attendance Audits",
+    href: "/attendance",
+    icon: Clock,
+    tag: "Live",
+  },
+];
+
 export function Sidebar({ pendingReviewCount }: { pendingReviewCount?: number }) {
   const pathname = usePathname();
   const { user, logout } = useAdminAuth();
 
-  const navItems: NavItem[] = [
-    {
-      label: "Dashboard",
-      href: "/",
-      icon: LayoutDashboard,
-    },
-    {
-      label: "Review Queue",
-      href: "/verifications",
-      icon: ShieldCheck,
-      badge: pendingReviewCount && pendingReviewCount > 0 ? pendingReviewCount : undefined,
-    },
-    {
-      label: "Internships",
-      href: "/internships",
-      icon: Briefcase,
-    },
-    {
-      label: "Colleges & Rosters",
-      href: "/colleges",
-      icon: Building2,
-    },
-    {
-      label: "Student Directory",
-      href: "/students",
-      icon: Users,
-    },
-    {
-      label: "Attendance Audits",
-      href: "/attendance",
-      icon: Clock,
-      tag: "Live",
-    },
-  ];
+  const role = user?.role || "";
+  const allowedHrefs = ROLE_NAVIGATION[role] || ROLE_NAVIGATION.department_admin;
+
+  // Filter nav items by role, inject live badges
+  const navItems = ALL_NAV_ITEMS
+    .filter((item) => allowedHrefs.includes(item.href))
+    .map((item) =>
+      item.href === "/verifications"
+        ? { ...item, badge: pendingReviewCount && pendingReviewCount > 0 ? pendingReviewCount : undefined }
+        : item
+    );
 
   return (
     <aside className="w-64 bg-white/95 backdrop-blur-2xl border-r border-slate-200 flex flex-col h-screen sticky top-0 text-slate-700 z-30 select-none shadow-sm">
@@ -154,7 +178,7 @@ export function Sidebar({ pendingReviewCount }: { pendingReviewCount?: number })
                 {user?.name || "Console Operator"}
               </p>
               <p className="font-mono text-[10px] text-sky-600 truncate uppercase tracking-wider font-semibold">
-                {user?.role?.replace("_", " ") || "Super Admin"}
+                {user?.role?.replace(/_/g, " ") || "Super Admin"}
               </p>
             </div>
           </div>
@@ -170,3 +194,4 @@ export function Sidebar({ pendingReviewCount }: { pendingReviewCount?: number })
     </aside>
   );
 }
+
