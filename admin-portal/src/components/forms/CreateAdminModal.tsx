@@ -32,7 +32,7 @@ export function CreateAdminModal({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<AdminRole>(
-    creatorRole === "super_admin" ? "college_admin" : "department_admin"
+    creatorRole === "super_admin" ? "college_admin" : "department_admin",
   );
   const [collegeId, setCollegeId] = useState(lockedCollegeId || "");
   const [departmentId, setDepartmentId] = useState("");
@@ -43,7 +43,10 @@ export function CreateAdminModal({
   // Load departments when college changes
   useEffect(() => {
     if (collegeId) {
-      mockApi.getDepartments(collegeId).then(setDepartments).catch(console.error);
+      mockApi
+        .getDepartments(collegeId)
+        .then(setDepartments)
+        .catch(console.error);
     } else {
       setDepartments([]);
       setDepartmentId("");
@@ -56,7 +59,9 @@ export function CreateAdminModal({
     setName("");
     setEmail("");
     setPassword("");
-    setRole(creatorRole === "super_admin" ? "college_admin" : "department_admin");
+    setRole(
+      creatorRole === "super_admin" ? "college_admin" : "department_admin",
+    );
     setCollegeId(lockedCollegeId || "");
     setDepartmentId("");
     setDepartments([]);
@@ -65,18 +70,25 @@ export function CreateAdminModal({
   };
 
   const validate = (): string | null => {
-    if (!name.trim() || name.trim().length < 2) return "Name must be at least 2 characters.";
-    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "Please enter a valid email.";
-    if (password.length < FIELD_LENGTHS.PASSWORD_MIN) return `Password must be at least ${FIELD_LENGTHS.PASSWORD_MIN} characters.`;
+    if (!name.trim() || name.trim().length < 2)
+      return "Name must be at least 2 characters.";
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      return "Please enter a valid email.";
+    if (password.length < FIELD_LENGTHS.PASSWORD_MIN)
+      return `Password must be at least ${FIELD_LENGTHS.PASSWORD_MIN} characters.`;
     if (!collegeId) return "Please select a college.";
-    if (role === "department_admin" && !departmentId) return "Please select a department for department admin.";
+    if (role === "department_admin" && !departmentId)
+      return "Please select a department for department admin.";
     return null;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const err = validate();
-    if (err) { setError(err); return; }
+    if (err) {
+      setError(err);
+      return;
+    }
 
     try {
       setIsSubmitting(true);
@@ -87,7 +99,8 @@ export function CreateAdminModal({
         password,
         role,
         college_id: collegeId || null,
-        department_id: role === "department_admin" ? (departmentId || null) : null,
+        department_id:
+          role === "department_admin" ? departmentId || null : null,
       };
       await mockApi.createAdminUser(payload);
       onSuccess();
@@ -121,8 +134,12 @@ export function CreateAdminModal({
               <UserPlus className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-extrabold text-slate-900">Create Admin</h3>
-              <p className="text-[11px] text-slate-500">Assign a new admin to your hierarchy</p>
+              <h3 className="text-base font-extrabold text-slate-900">
+                Create Admin
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                Assign a new admin to your hierarchy
+              </p>
             </div>
           </div>
           <button
@@ -248,7 +265,11 @@ export function CreateAdminModal({
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/10 transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="">
-                  {!collegeId ? "Select college first..." : departments.length === 0 ? "No departments found..." : "Select a department..."}
+                  {!collegeId
+                    ? "Select college first..."
+                    : departments.length === 0
+                      ? "No departments found..."
+                      : "Select a department..."}
                 </option>
                 {departments.map((d) => (
                   <option key={d.id} value={d.id}>

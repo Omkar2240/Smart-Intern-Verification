@@ -21,6 +21,20 @@ export const mockAnalytics: Record<string, RoleAnalytics> = {
     today_attendance: 4280,
     avg_attendance_rate: 87,
   },
+  // Platform Admin: global stats (similar to super_admin)
+  admin: {
+    total_users: 7820,
+    verified_users: 5940,
+    pending_reviews: 143,
+    rejected_verifications: 287,
+    active_colleges: 3,
+    active_departments: 26,
+    total_internships: 1240,
+    pending_internships: 312,
+    verified_internships: 896,
+    today_attendance: 4280,
+    avg_attendance_rate: 87,
+  },
   // College Admin: single college stats (GHRCE)
   college_admin: {
     total_users: 2400,
