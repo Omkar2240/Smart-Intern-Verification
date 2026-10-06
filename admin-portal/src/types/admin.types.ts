@@ -1,5 +1,8 @@
 // Admin Role Types
-export type AdminRole = "super_admin" | "college_admin" | "department_admin" | "student";
+export type AdminRole = "super_admin" | "admin" | "college_admin" | "department_admin" | "student";
+
+// Future role placeholder for mentor module:
+// export type AdminRole = "super_admin" | "admin" | "college_admin" | "department_admin" | "industry_admin" | "student";
 
 // Admin assignment links user to college/department
 export interface AdminAssignment {

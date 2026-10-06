@@ -4,7 +4,7 @@ export interface AdminUser {
   id: string;
   name: string;
   email: string;
-  role: "super_admin" | "college_admin" | "department_admin" | "student" | "admin";
+  role: "super_admin" | "admin" | "college_admin" | "department_admin" | "student";
   college_id?: string | null;
   college_name?: string | null;
   department_id?: string | null;
