@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.constants import INTERNSHIP_TYPE_DEFAULT, PENDING_STATUS, INTERNSHIP_VERIFICATION_STAGES
 from app.api.deps import get_current_active_user, get_db
 from app.models.internship import Internship
 from app.models.user import User
@@ -173,7 +174,7 @@ async def create_internship(
         company_name=body.company_name.strip(),
         role=body.role.strip(),
         department=body.department.strip() if body.department else None,
-        internship_type=body.internship_type or "on_site",
+        internship_type=body.internship_type or INTERNSHIP_TYPE_DEFAULT,
         location=body.location.strip() if body.location else None,
         supervisor_name=body.supervisor_name.strip() if body.supervisor_name else None,
         supervisor_email=body.supervisor_email.strip() if body.supervisor_email else None,
@@ -182,8 +183,8 @@ async def create_internship(
         end_date=body.end_date,
         stipend=body.stipend.strip() if body.stipend else None,
         offer_letter_url=body.offer_letter_url,
-        verification_stage="submitted",
-        status="pending",
+        verification_stage=INTERNSHIP_VERIFICATION_STAGES[0],
+        status=PENDING_STATUS,
         is_active=True,
     )
 

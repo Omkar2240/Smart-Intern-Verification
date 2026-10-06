@@ -14,6 +14,7 @@ from app.models.identity_verification import IdentityVerification
 from app.models.face_embedding import FaceEmbedding
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.college_student_roster import CollegeStudentRoster
+from app.core.constants import INTERNSHIP_TYPES
 from app.core.security import create_access_token
 from tests.conftest import register_user
 
@@ -357,7 +358,7 @@ async def test_admin_internship_management_and_force_verify(client: AsyncClient,
         "company_name": "Tesla Motors",
         "role": "Autopilot Intern",
         "department": "AI Vision",
-        "internship_type": "on_site",
+        "internship_type": INTERNSHIP_TYPES[0],  # on_site
         "location": "Palo Alto HQ",
         "stipend": "$50/hr",
     }

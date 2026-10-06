@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, field_validator
 
+from app.core.constants import DEFAULT_USER_ROLE
+
 
 # ---------------------------------------------------------------------------
 # Requests
@@ -110,7 +112,7 @@ class UserBrief(BaseModel):
     id: UUID
     name: str
     email: str
-    role: str = "student"
+    role: str = DEFAULT_USER_ROLE  # student
 
     model_config = {"from_attributes": True}
 

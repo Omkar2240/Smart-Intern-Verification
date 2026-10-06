@@ -126,4 +126,6 @@ from app.dependencies.verification import (  # noqa: E402
 from app.dependencies.admin import (  # noqa: E402
     require_admin,
     require_super_admin,
-)
+    require_college_admin,
+    require_department_admin,
+)

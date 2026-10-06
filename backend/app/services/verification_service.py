@@ -18,6 +18,16 @@ from app.schemas.verification import VerificationStatusResponse
 from app.services.document.verifier import college_id_verifier
 from app.services.face.service import face_service, FaceError
 from app.storage.local import LocalStorage
+from app.core.constants import (
+    DEFAULT_VERIFICATION_STATUS,
+    DEFAULT_COLLEGE_STATUS,
+    DEFAULT_COLLEGE_ID_STATUS,
+    DEFAULT_FACE_STATUS,
+    VERIFICATION_STATUS,
+    COLLEGE_STATUS,
+    COLLEGE_ID_STATUS,
+    FACE_STATUS,
+)
 
 
 class VerificationServiceError(Exception):
@@ -55,10 +65,10 @@ class VerificationService:
         if record is None:
             record = IdentityVerification(
                 user_id=user_id,
-                college_status="not_started",
-                college_id_status="not_started",
-                face_status="not_started",
-                overall_status="not_started",
+                college_status=DEFAULT_COLLEGE_STATUS,  # not_started
+                college_id_status=DEFAULT_COLLEGE_ID_STATUS,  # not_started
+                face_status=DEFAULT_FACE_STATUS,  # not_started
+                overall_status=DEFAULT_VERIFICATION_STATUS,  # not_started
             )
             db.add(record)
             await db.commit()
@@ -79,14 +89,14 @@ class VerificationService:
             college_name = record.college.name
 
         return VerificationStatusResponse(
-            is_verified=record.overall_status == "verified",
+            is_verified=record.overall_status == VERIFICATION_STATUS[2],  # verified
             current_step=record.current_step,
             college_id=record.college_id,
             college_name=college_name,
-            college_verified=record.college_status == "selected",
-            college_id_verified=record.college_id_status in ("verified", "manual_review"),
+            college_verified=record.college_status == COLLEGE_STATUS[1],  # selected
+            college_id_verified=record.college_id_status in (COLLEGE_ID_STATUS[2], COLLEGE_ID_STATUS[4]),  # verified, manual_review
             college_id_status=record.college_id_status,
-            face_verified=record.face_status == "verified",
+            face_verified=record.face_status == FACE_STATUS[2],  # verified
             face_status=record.face_status,
             overall_status=record.overall_status,
             rejection_reason=record.rejection_reason,
@@ -110,10 +120,10 @@ class VerificationService:
         record = await self.get_or_create_verification(db, user_id)
 
         record.college_id = college.id
-        record.college_status = "selected"
+        record.college_status = COLLEGE_STATUS[1]  # selected
         # If overall status was not started, advance to pending
-        if record.overall_status == "not_started":
-            record.overall_status = "pending"
+        if record.overall_status == DEFAULT_VERIFICATION_STATUS:  # not_started
+            record.overall_status = VERIFICATION_STATUS[1]  # pending
 
         await db.commit()
         await db.refresh(record)
@@ -129,7 +139,7 @@ class VerificationService:
         """Validate and verify college ID document."""
         record = await self.get_or_create_verification(db, user.id)
 
-        if record.college_status != "selected" or not record.college_id:
+        if record.college_status != COLLEGE_STATUS[1] or not record.college_id:  # selected
             raise VerificationServiceError(
                 "Please select your college before uploading your college ID card.",
                 status_code=400,
@@ -150,8 +160,8 @@ class VerificationService:
             college=college,
         )
 
-        if verif_result.status == "rejected":
-            record.college_id_status = "rejected"
+        if verif_result.status == COLLEGE_ID_STATUS[3]:  # rejected
+            record.college_id_status = COLLEGE_ID_STATUS[3]  # rejected
             record.rejection_reason = verif_result.rejection_reason
             record.extracted_metadata = verif_result.extracted_fields
             await db.commit()
@@ -192,7 +202,7 @@ class VerificationService:
         """Run face detection, quality, liveness, and store ArcFace embedding."""
         record = await self.get_or_create_verification(db, user.id)
 
-        if record.college_id_status not in ("verified", "manual_review"):
+        if record.college_id_status not in (COLLEGE_ID_STATUS[2], COLLEGE_ID_STATUS[4]):  # verified, manual_review
             raise VerificationServiceError(
                 "Please complete and submit your college ID verification before face enrollment.",
                 status_code=400,
@@ -201,7 +211,7 @@ class VerificationService:
         try:
             face_result = self.face_service.process_face_image(image_bytes)
         except Exception as e:
-            record.face_status = "rejected"
+            record.face_status = FACE_STATUS[3]  # rejected
             record.rejection_reason = str(e)
             await db.commit()
             raise VerificationServiceError(str(e), status_code=400)
@@ -225,11 +235,11 @@ class VerificationService:
         )
         db.add(embedding_record)
 
-        record.face_status = "verified"
+        record.face_status = FACE_STATUS[2]  # verified
         record.rejection_reason = None
         self._recompute_overall_status(record)
 
-        if record.overall_status == "verified":
+        if record.overall_status == VERIFICATION_STATUS[2]:  # verified
             user.is_verified = True
             db.add(user)
 
@@ -240,18 +250,18 @@ class VerificationService:
     def _recompute_overall_status(self, record: IdentityVerification):
         """Update overall status based on sub-step statuses."""
         if (
-            record.college_status == "selected"
-            and record.face_status == "verified"
+            record.college_status == COLLEGE_STATUS[1]  # selected
+            and record.face_status == FACE_STATUS[2]  # verified
         ):
-            if record.college_id_status == "verified":
-                record.overall_status = "verified"
+            if record.college_id_status == COLLEGE_ID_STATUS[2]:  # verified
+                record.overall_status = VERIFICATION_STATUS[2]  # verified
                 record.verified_at = datetime.now(timezone.utc)
-            elif record.college_id_status == "manual_review":
-                record.overall_status = "manual_review"
+            elif record.college_id_status == COLLEGE_ID_STATUS[4]:  # manual_review
+                record.overall_status = VERIFICATION_STATUS[4]  # manual_review
             else:
-                record.overall_status = "pending"
+                record.overall_status = VERIFICATION_STATUS[1]  # pending
         else:
-            record.overall_status = "pending"
+            record.overall_status = VERIFICATION_STATUS[1]  # pending
 
 
 verification_service = VerificationService()

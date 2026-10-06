@@ -32,6 +32,13 @@ from app.schemas.admin import (
     AdminAnalyticsSummary,
     AdminRosterUploadResponse,
 )
+from app.core.constants import (
+    VERIFICATION_STATUS,
+    COLLEGE_ID_STATUS,
+    FACE_STATUS,
+    PENDING_STATUS,
+    COLLEGE_STATUS,
+)
 
 
 class AdminService:
@@ -60,14 +67,14 @@ class AdminService:
 
         conditions = []
         if status_filter and status_filter != "all":
-            if status_filter == "manual_review":
-                conditions.append(IdentityVerification.college_id_status == "manual_review")
-            elif status_filter == "verified":
-                conditions.append(IdentityVerification.overall_status == "verified")
-            elif status_filter == "rejected":
-                conditions.append(IdentityVerification.overall_status == "rejected")
-            elif status_filter == "pending":
-                conditions.append(IdentityVerification.overall_status == "pending")
+            if status_filter == COLLEGE_ID_STATUS[4]:  # manual_review
+                conditions.append(IdentityVerification.college_id_status == COLLEGE_ID_STATUS[4])
+            elif status_filter == VERIFICATION_STATUS[2]:  # verified
+                conditions.append(IdentityVerification.overall_status == VERIFICATION_STATUS[2])
+            elif status_filter == VERIFICATION_STATUS[3]:  # rejected
+                conditions.append(IdentityVerification.overall_status == VERIFICATION_STATUS[3])
+            elif status_filter == VERIFICATION_STATUS[1]:  # pending
+                conditions.append(IdentityVerification.overall_status == VERIFICATION_STATUS[1])
 
         if college_id:
             conditions.append(IdentityVerification.college_id == college_id)
@@ -98,7 +105,7 @@ class AdminService:
 
         # Pagination & ordering (manual review first, then recent)
         query = query.order_by(
-            (IdentityVerification.college_id_status == "manual_review").desc(),
+            (IdentityVerification.college_id_status == COLLEGE_ID_STATUS[4]).desc(),  # manual_review
             IdentityVerification.updated_at.desc(),
         ).offset((page - 1) * page_size).limit(page_size)
 
@@ -174,16 +181,16 @@ class AdminService:
         """
         iv = await AdminService.get_verification_item(db, user_id)
 
-        iv.college_id_status = "verified"
+        iv.college_id_status = COLLEGE_ID_STATUS[2]  # verified
         iv.rejection_reason = None
 
         # Check if face is also verified
-        if iv.face_status == "verified":
-            iv.overall_status = "verified"
+        if iv.face_status == FACE_STATUS[2]:  # verified
+            iv.overall_status = VERIFICATION_STATUS[2]  # verified
             iv.verified_at = datetime.now(timezone.utc)
             iv.user.is_verified = True
         else:
-            iv.overall_status = "pending"
+            iv.overall_status = VERIFICATION_STATUS[1]  # pending
 
         # Record audit log
         audit = AdminAuditLog(
@@ -219,8 +226,8 @@ class AdminService:
         """
         iv = await AdminService.get_verification_item(db, user_id)
 
-        iv.college_id_status = "rejected"
-        iv.overall_status = "rejected"
+        iv.college_id_status = COLLEGE_ID_STATUS[3]  # rejected
+        iv.overall_status = VERIFICATION_STATUS[3]  # rejected
         iv.rejection_reason = reason
         iv.user.is_verified = False
 
@@ -260,8 +267,8 @@ class AdminService:
         for emb in embeddings_res.scalars().all():
             await db.delete(emb)
 
-        iv.face_status = "not_started"
-        iv.overall_status = "pending"
+        iv.face_status = FACE_STATUS[0]  # not_started
+        iv.overall_status = VERIFICATION_STATUS[1]  # pending
         iv.user.is_verified = False
 
         # Record audit log
@@ -306,17 +313,17 @@ class AdminService:
         if not iv:
             iv = IdentityVerification(
                 user_id=user.id,
-                college_status="verified",
-                college_id_status="verified",
-                face_status="verified",
-                overall_status="verified",
+                college_status=COLLEGE_STATUS[1],  # selected (using as verified)
+                college_id_status=COLLEGE_ID_STATUS[2],  # verified
+                face_status=FACE_STATUS[2],  # verified
+                overall_status=VERIFICATION_STATUS[2],  # verified
                 verified_at=now,
             )
             db.add(iv)
         else:
-            iv.college_id_status = "verified"
-            iv.face_status = "verified"
-            iv.overall_status = "verified"
+            iv.college_id_status = COLLEGE_ID_STATUS[2]  # verified
+            iv.face_status = FACE_STATUS[2]  # verified
+            iv.overall_status = VERIFICATION_STATUS[2]  # verified
             iv.rejection_reason = None
             iv.verified_at = now
 
@@ -336,7 +343,7 @@ class AdminService:
         return AdminActionResponse(
             success=True,
             message="Student successfully verified by administrator",
-            overall_status="verified",
+            overall_status=VERIFICATION_STATUS[2],  # verified
         )
 
     @staticmethod
@@ -397,7 +404,7 @@ class AdminService:
 
         # Order by pending first, then newest
         query = query.order_by(
-            (Internship.status == "pending").desc(),
+            (Internship.status == PENDING_STATUS).desc(),
             Internship.created_at.desc(),
         ).offset((page - 1) * page_size).limit(page_size)
 
@@ -473,11 +480,11 @@ class AdminService:
         if status:
             internship.status = status
         elif stage == "verified":
-            internship.status = "verified"
+            internship.status = VERIFICATION_STATUS[2]  # verified
         elif stage == "rejected":
-            internship.status = "rejected"
+            internship.status = VERIFICATION_STATUS[3]  # rejected
         else:
-            internship.status = "pending"
+            internship.status = PENDING_STATUS  # pending
 
         internship.rejection_reason = rejection_reason if stage == "rejected" else None
 
@@ -512,17 +519,17 @@ class AdminService:
         total_users = (await db.execute(select(func.count(User.id)))).scalar() or 0
         verified_users = (
             await db.execute(
-                select(func.count(IdentityVerification.id)).where(IdentityVerification.overall_status == "verified")
+                select(func.count(IdentityVerification.id)).where(IdentityVerification.overall_status == VERIFICATION_STATUS[2])  # verified
             )
         ).scalar() or 0
         pending_reviews = (
             await db.execute(
-                select(func.count(IdentityVerification.id)).where(IdentityVerification.college_id_status == "manual_review")
+                select(func.count(IdentityVerification.id)).where(IdentityVerification.college_id_status == COLLEGE_ID_STATUS[4])  # manual_review
             )
         ).scalar() or 0
         rejected_verifications = (
             await db.execute(
-                select(func.count(IdentityVerification.id)).where(IdentityVerification.overall_status == "rejected")
+                select(func.count(IdentityVerification.id)).where(IdentityVerification.overall_status == VERIFICATION_STATUS[3])  # rejected
             )
         ).scalar() or 0
         active_colleges = (
@@ -532,12 +539,12 @@ class AdminService:
         total_internships = (await db.execute(select(func.count(Internship.id)))).scalar() or 0
         pending_internships = (
             await db.execute(
-                select(func.count(Internship.id)).where(Internship.status == "pending")
+                select(func.count(Internship.id)).where(Internship.status == PENDING_STATUS)  # pending
             )
         ).scalar() or 0
         verified_internships = (
             await db.execute(
-                select(func.count(Internship.id)).where(Internship.status == "verified")
+                select(func.count(Internship.id)).where(Internship.status == VERIFICATION_STATUS[2])  # verified
             )
         ).scalar() or 0
 

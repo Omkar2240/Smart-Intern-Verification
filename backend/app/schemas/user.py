@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from app.core.constants import DEFAULT_USER_ROLE
+
 
 class UserResponse(BaseModel):
     id: UUID
@@ -14,7 +16,7 @@ class UserResponse(BaseModel):
     email: str
     registration_number: str
     mobile_number: str
-    role: str = "student"
+    role: str = DEFAULT_USER_ROLE  # student
     is_active: bool
     is_verified: bool
     created_at: datetime
