@@ -232,13 +232,25 @@ class SuperAdminService:
         total = (await db.execute(select(func.count(User.id)).where(and_(*conditions)))).scalar_one()
         rows = (
             await db.execute(
-                select(User).where(and_(*conditions)).order_by(User.created_at.desc())
+                select(User)
+                .options(selectinload(User.college), selectinload(User.department))
+                .where(and_(*conditions))
+                .order_by(User.created_at.desc())
                 .offset((page - 1) * page_size).limit(page_size)
             )
         ).scalars().all()
         return {
             "total": total, "page": page, "page_size": page_size,
-            "items": [AdminUserResponse.model_validate(row) for row in rows],
+            "items": [
+                AdminUserResponse.model_validate(
+                    {
+                        **row.__dict__,
+                        "college_name": row.college.name if row.college else None,
+                        "department_name": row.department.name if row.department else None,
+                    }
+                )
+                for row in rows
+            ],
         }
 
     @staticmethod

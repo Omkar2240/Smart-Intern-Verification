@@ -474,6 +474,8 @@ async def test_college_admin_scope_is_authoritative(db_session: AsyncSession):
     )
     assert result["total"] == 1
     assert result["items"][0].email == "ghrce-dept@example.com"
+    assert result["items"][0].department_id == department_one.id
+    assert result["items"][0].department_name == "Computer Engineering"
 
     created = await SuperAdminService.create_admin(
         db_session,

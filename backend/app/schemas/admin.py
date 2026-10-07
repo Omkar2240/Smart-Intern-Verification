@@ -230,7 +230,9 @@ class AdminUserResponse(BaseModel):
     email: str
     role: str
     college_id: UUID | None
+    college_name: str | None = None
     department_id: UUID | None
+    department_name: str | None = None
     permissions: list[str] = Field(default_factory=list)
     is_active: bool
     created_at: datetime
