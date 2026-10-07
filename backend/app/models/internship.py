@@ -7,6 +7,7 @@ from sqlalchemy import Boolean, ForeignKey, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
+from app.core.constants import INTERNSHIP_TYPE_DEFAULT, PENDING_STATUS, INTERNSHIP_VERIFICATION_STAGES
 
 
 class Internship(Base, UUIDMixin, TimestampMixin):
@@ -22,7 +23,7 @@ class Internship(Base, UUIDMixin, TimestampMixin):
     company_name: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(255), nullable=False)
     department: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    internship_type: Mapped[str] = mapped_column(String(50), default="on_site", nullable=False)
+    internship_type: Mapped[str] = mapped_column(String(50), default=INTERNSHIP_TYPE_DEFAULT, nullable=False)
     location: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     supervisor_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -36,9 +37,9 @@ class Internship(Base, UUIDMixin, TimestampMixin):
 
     # Verification workflow stages:
     # "submitted" -> "tp_review" -> "mentor_review" -> "verified" (or "rejected")
-    verification_stage: Mapped[str] = mapped_column(String(50), default="submitted", nullable=False)
+    verification_stage: Mapped[str] = mapped_column(String(50), default=INTERNSHIP_VERIFICATION_STAGES[0], nullable=False)
     # Status: "pending", "verified", "rejected"
-    status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(50), default=PENDING_STATUS, nullable=False, index=True)
     rejection_reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

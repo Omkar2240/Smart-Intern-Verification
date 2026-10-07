@@ -19,6 +19,10 @@ from app.services.verification_service import (
     VerificationServiceError,
     verification_service,
 )
+from app.core.constants import (
+    COLLEGE_ID_STATUS,
+    VERIFICATION_STEPS,
+)
 
 router = APIRouter(prefix="/verification", tags=["Identity Verification"])
 
@@ -52,7 +56,7 @@ async def select_college(
         return VerificationStepResponse(
             success=True,
             message="College selected successfully.",
-            step="college_selection",
+            step=VERIFICATION_STEPS[0],  # college_selection
             step_status=record.college_status,
             overall_status=record.overall_status,
         )
@@ -86,14 +90,14 @@ async def upload_college_id(
 
         msg = (
             "College ID verified successfully."
-            if record.college_id_status == "verified"
+            if record.college_id_status == COLLEGE_ID_STATUS[2]  # verified
             else "College ID uploaded and routed for administrative review."
         )
 
         return VerificationStepResponse(
             success=True,
             message=msg,
-            step="college_id",
+            step=VERIFICATION_STEPS[1],  # college_id
             step_status=record.college_id_status,
             overall_status=record.overall_status,
             extracted_metadata=metadata,
@@ -122,7 +126,7 @@ async def enroll_face(
         return VerificationStepResponse(
             success=True,
             message="Face enrolled and identity verified successfully!",
-            step="face",
+            step=VERIFICATION_STEPS[2],  # face
             step_status=record.face_status,
             overall_status=record.overall_status,
         )

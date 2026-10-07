@@ -5,6 +5,7 @@ Tests for Internship CRUD and verification stage updates.
 import pytest
 from httpx import AsyncClient
 
+from app.core.constants import INTERNSHIP_TYPES
 from tests.conftest import register_user
 
 
@@ -29,7 +30,7 @@ async def test_internship_crud_and_status(client: AsyncClient):
         "company_name": "Google",
         "role": "Software Engineering Intern",
         "department": "Android",
-        "internship_type": "on_site",
+        "internship_type": INTERNSHIP_TYPES[0],  # on_site
         "location": "Bangalore Campus, Block B",
         "supervisor_name": "Sundar P.",
         "supervisor_email": "sundar@example.com",
@@ -118,7 +119,7 @@ async def test_internship_proof_upload_and_retrieve(client: AsyncClient):
     payload = {
         "company_name": "Microsoft",
         "role": "Cloud Engineering Intern",
-        "internship_type": "hybrid",
+        "internship_type": INTERNSHIP_TYPES[2],  # hybrid
         "location": "Hyderabad",
         "offer_letter_url": data["url"],
     }

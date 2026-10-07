@@ -12,11 +12,12 @@ from PIL import Image
 from app.models.college import College
 from app.models.user import User
 from app.services.document.ocr import ocr_service, ExtractedDocumentData
+from app.core.constants import COLLEGE_ID_STATUS
 
 
 @dataclass
 class DocumentVerificationResult:
-    status: str  # "verified" | "manual_review" | "rejected"
+    status: str  # COLLEGE_ID_STATUS[2]="verified" | COLLEGE_ID_STATUS[4]="manual_review" | COLLEGE_ID_STATUS[3]="rejected"
     extracted_fields: dict
     match_score: float
     review_notes: Optional[str] = None
@@ -51,7 +52,7 @@ class CollegeIdVerifier:
         # 1. MIME type validation
         if content_type.lower() not in self.ALLOWED_MIME_TYPES:
             return DocumentVerificationResult(
-                status="rejected",
+                status=COLLEGE_ID_STATUS[3],  # rejected
                 extracted_fields={},
                 match_score=0.0,
                 rejection_reason=f"Unsupported file type '{content_type}'. Allowed: JPEG, PNG, WebP.",
@@ -60,7 +61,7 @@ class CollegeIdVerifier:
         # 2. File size & image decode validation
         if len(image_bytes) < 1024:  # Less than 1 KB is too small to be a card
             return DocumentVerificationResult(
-                status="rejected",
+                status=COLLEGE_ID_STATUS[3],  # rejected
                 extracted_fields={},
                 match_score=0.0,
                 rejection_reason="File is too small or corrupted.",
@@ -71,7 +72,7 @@ class CollegeIdVerifier:
             width, height = pil_img.size
         except Exception:
             return DocumentVerificationResult(
-                status="rejected",
+                status=COLLEGE_ID_STATUS[3],  # rejected
                 extracted_fields={},
                 match_score=0.0,
                 rejection_reason="Uploaded file is not a valid image.",
@@ -80,7 +81,7 @@ class CollegeIdVerifier:
         # Minimum resolution check (e.g. 200 x 150)
         if width < 150 or height < 150:
             return DocumentVerificationResult(
-                status="rejected",
+                status=COLLEGE_ID_STATUS[3],  # rejected
                 extracted_fields={"dimensions": f"{width}x{height}"},
                 match_score=0.0,
                 rejection_reason="Image resolution is too low for document verification.",
@@ -147,7 +148,7 @@ class CollegeIdVerifier:
         # route to manual_review instead of auto-accepting or hard rejecting!
         if len(raw_text_lower.strip()) < 15:
             return DocumentVerificationResult(
-                status="manual_review",
+                status=COLLEGE_ID_STATUS[4],  # manual_review
                 extracted_fields=extracted_summary,
                 match_score=0.40,
                 review_notes="Automated OCR text could not be clearly resolved. Card forwarded to administrative manual review.",
@@ -155,20 +156,20 @@ class CollegeIdVerifier:
 
         if match_score >= 0.70:
             return DocumentVerificationResult(
-                status="verified",
+                status=COLLEGE_ID_STATUS[2],  # verified
                 extracted_fields=extracted_summary,
                 match_score=match_score,
             )
         elif match_score >= 0.35:
             return DocumentVerificationResult(
-                status="manual_review",
+                status=COLLEGE_ID_STATUS[4],  # manual_review
                 extracted_fields=extracted_summary,
                 match_score=match_score,
                 review_notes="Partial match found between college ID card and profile details. Forwarded for administrative review.",
             )
         else:
             return DocumentVerificationResult(
-                status="rejected",
+                status=COLLEGE_ID_STATUS[3],  # rejected
                 extracted_fields=extracted_summary,
                 match_score=match_score,
                 rejection_reason="The uploaded ID card does not appear to match the selected college or your registered name.",

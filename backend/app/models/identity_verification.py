@@ -9,6 +9,14 @@ from sqlalchemy import DateTime, ForeignKey, JSON, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
+from app.core.constants import (
+    DEFAULT_VERIFICATION_STATUS,
+    DEFAULT_COLLEGE_STATUS,
+    DEFAULT_COLLEGE_ID_STATUS,
+    DEFAULT_FACE_STATUS,
+    VERIFICATION_STATUS,
+    COLLEGE_ID_STATUS,
+)
 
 
 class IdentityVerification(Base, UUIDMixin, TimestampMixin):
@@ -30,18 +38,18 @@ class IdentityVerification(Base, UUIDMixin, TimestampMixin):
 
     # Status tracking per step
     # college_status: "not_started" | "selected"
-    college_status: Mapped[str] = mapped_column(String(30), default="not_started", nullable=False)
+    college_status: Mapped[str] = mapped_column(String(30), default=DEFAULT_COLLEGE_STATUS, nullable=False)
 
     # college_id_status: "not_started" | "pending" | "verified" | "rejected" | "manual_review"
-    college_id_status: Mapped[str] = mapped_column(String(30), default="not_started", nullable=False)
+    college_id_status: Mapped[str] = mapped_column(String(30), default=DEFAULT_COLLEGE_ID_STATUS, nullable=False)
     college_id_storage_ref: Mapped[str | None] = mapped_column(String(512), nullable=True)
     extracted_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # face_status: "not_started" | "pending" | "verified" | "rejected"
-    face_status: Mapped[str] = mapped_column(String(30), default="not_started", nullable=False)
+    face_status: Mapped[str] = mapped_column(String(30), default=DEFAULT_FACE_STATUS, nullable=False)
 
     # overall_status: "not_started" | "pending" | "verified" | "rejected" | "manual_review"
-    overall_status: Mapped[str] = mapped_column(String(30), default="not_started", nullable=False, index=True)
+    overall_status: Mapped[str] = mapped_column(String(30), default=DEFAULT_VERIFICATION_STATUS, nullable=False, index=True)
 
     rejection_reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -52,7 +60,7 @@ class IdentityVerification(Base, UUIDMixin, TimestampMixin):
 
     @property
     def is_verified(self) -> bool:
-        return self.overall_status == "verified"
+        return self.overall_status == VERIFICATION_STATUS[2]  # "verified"
 
     @property
     def current_step(self) -> str:
