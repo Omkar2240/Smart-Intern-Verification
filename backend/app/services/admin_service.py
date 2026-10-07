@@ -44,12 +44,23 @@ from app.core.constants import (
 
 def _admin_user_scope(admin_user: User):
     """Return the user predicates allowed for an admin's dashboard."""
+    student_scope = [User.role == "student"]
     if admin_user.role in ("admin", "super_admin"):
-        return []
+        return student_scope
     if admin_user.role == "department_admin":
-        return [User.department_id == admin_user.department_id] if admin_user.department_id else [false()]
+        if not admin_user.department_id or not admin_user.college_id:
+            return [false()]
+        return [
+            *student_scope,
+            User.college_id == admin_user.college_id,
+            User.department_id == admin_user.department_id,
+        ]
     if admin_user.role == "college_admin":
-        return [User.college_id == admin_user.college_id] if admin_user.college_id else [false()]
+        return (
+            [*student_scope, User.college_id == admin_user.college_id]
+            if admin_user.college_id
+            else [false()]
+        )
     return [false()]
 
 

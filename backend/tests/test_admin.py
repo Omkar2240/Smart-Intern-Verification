@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.models.college import College
+from app.models.department import Department
 from app.models.identity_verification import IdentityVerification
 from app.models.face_embedding import FaceEmbedding
 from app.models.admin_audit_log import AdminAuditLog
@@ -277,6 +278,104 @@ async def test_admin_analytics_summary(client: AsyncClient, db_session: AsyncSes
     assert "pending_reviews" in data
     assert "rejected_verifications" in data
     assert "active_colleges" in data
+
+
+@pytest.mark.asyncio
+async def test_admin_analytics_summary_counts_students_within_role_scope(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """Analytics must exclude admins and enforce college/department boundaries."""
+    college_one = College(
+        name="College One",
+        city="Pune",
+        state="Maharashtra",
+        country="India",
+        code="COL1",
+        is_active=True,
+    )
+    college_two = College(
+        name="College Two",
+        city="Mumbai",
+        state="Maharashtra",
+        country="India",
+        code="COL2",
+        is_active=True,
+    )
+    db_session.add_all([college_one, college_two])
+    await db_session.flush()
+
+    department_one = Department(
+        college_id=college_one.id,
+        name="Engineering",
+        code="ENG",
+    )
+    department_two = Department(
+        college_id=college_one.id,
+        name="Science",
+        code="SCI",
+    )
+    department_other_college = Department(
+        college_id=college_two.id,
+        name="Engineering",
+        code="ENG",
+    )
+    db_session.add_all(
+        [department_one, department_two, department_other_college]
+    )
+    await db_session.flush()
+
+    def student(email: str, college_id, department_id) -> User:
+        suffix = email.split("@")[0]
+        return User(
+            email=email,
+            name=suffix,
+            registration_number=f"REG_{suffix}",
+            mobile_number=f"9{uuid4().int % 10**9:09d}",
+            password_hash="hashed_pw",
+            role="student",
+            college_id=college_id,
+            department_id=department_id,
+        )
+
+    db_session.add_all(
+        [
+            student("one_eng@example.com", college_one.id, department_one.id),
+            student("two_eng@example.com", college_one.id, department_one.id),
+            student("one_sci@example.com", college_one.id, department_two.id),
+            student(
+                "other_college_eng@example.com",
+                college_two.id,
+                department_other_college.id,
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    super_admin, super_token = await create_admin_user(
+        db_session, role="super_admin"
+    )
+    college_admin, college_token = await create_admin_user(
+        db_session, role="college_admin"
+    )
+    college_admin.college_id = college_one.id
+    department_admin, department_token = await create_admin_user(
+        db_session, role="department_admin"
+    )
+    department_admin.college_id = college_one.id
+    department_admin.department_id = department_one.id
+    await db_session.commit()
+
+    async def total_users(token: str) -> int:
+        response = await client.get(
+            "/api/v1/admin/analytics/summary",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        return response.json()["total_users"]
+
+    assert await total_users(super_token) == 4
+    assert await total_users(college_token) == 3
+    assert await total_users(department_token) == 2
 
 
 @pytest.mark.asyncio
