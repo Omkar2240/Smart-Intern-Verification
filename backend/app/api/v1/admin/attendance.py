@@ -27,6 +27,7 @@ async def get_admin_attendance(
 ):
     return await list_attendance(
         db,
+        admin_user=current_admin,
         requested_date=requested_date,
         date_filter=date_filter,
         status_filter=status_filter,

@@ -15,6 +15,7 @@ from app.models.identity_verification import IdentityVerification
 from app.models.face_embedding import FaceEmbedding
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.college_student_roster import CollegeStudentRoster
+from app.models.internship import Internship
 from app.core.constants import INTERNSHIP_TYPES
 from app.core.security import create_access_token
 from app.schemas.admin import AdminUserCreate
@@ -418,6 +419,98 @@ async def test_admin_analytics_summary_counts_students_within_role_scope(
     assert await total_users(super_token) == 4
     assert await total_users(college_token) == 3
     assert await total_users(department_token) == 2
+
+
+@pytest.mark.asyncio
+async def test_department_admin_lists_only_its_college_department(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """Department admins must not see adjacent departments in review or internship queues."""
+    college = College(
+        name="Scoped College",
+        city="Pune",
+        state="Maharashtra",
+        country="India",
+        code="SCOPE",
+    )
+    other_college = College(
+        name="Other Scoped College",
+        city="Mumbai",
+        state="Maharashtra",
+        country="India",
+        code="SCOPE2",
+    )
+    db_session.add_all([college, other_college])
+    await db_session.flush()
+    department = Department(college_id=college.id, name="Mechanical", code="ME")
+    other_department = Department(college_id=college.id, name="Civil", code="CE")
+    foreign_department = Department(
+        college_id=other_college.id, name="Mechanical", code="ME"
+    )
+    db_session.add_all([department, other_department, foreign_department])
+    await db_session.flush()
+
+    def make_student(name: str, college_id, department_id) -> User:
+        suffix = uuid4().hex
+        return User(
+            name=name,
+            email=f"{suffix}@example.com",
+            registration_number=f"REG-{suffix}",
+            mobile_number=f"9{uuid4().int % 10**9:09d}",
+            password_hash="hashed_pw",
+            role="student",
+            college_id=college_id,
+            department_id=department_id,
+        )
+
+    scoped_student = make_student("Mechanical Student", college.id, department.id)
+    same_college_student = make_student("Civil Student", college.id, other_department.id)
+    foreign_student = make_student(
+        "Foreign Mechanical Student", other_college.id, foreign_department.id
+    )
+    db_session.add_all([scoped_student, same_college_student, foreign_student])
+    await db_session.flush()
+    db_session.add_all(
+        [
+            IdentityVerification(
+                user_id=student.id,
+                college_id=student.college_id,
+                overall_status="pending",
+            )
+            for student in (scoped_student, same_college_student, foreign_student)
+        ]
+    )
+    db_session.add_all(
+        [
+            Internship(
+                user_id=student.id,
+                company_name=f"{student.name} Company",
+                role="Intern",
+            )
+            for student in (scoped_student, same_college_student, foreign_student)
+        ]
+    )
+    department_admin, token = await create_admin_user(
+        db_session, role="department_admin"
+    )
+    department_admin.college_id = college.id
+    department_admin.department_id = department.id
+    await db_session.commit()
+
+    headers = {"Authorization": f"Bearer {token}"}
+    verifications = await client.get("/api/v1/admin/verifications", headers=headers)
+    internships = await client.get("/api/v1/admin/internships", headers=headers)
+    analytics = await client.get("/api/v1/admin/analytics/summary", headers=headers)
+
+    assert verifications.status_code == 200
+    assert verifications.json()["total"] == 1
+    assert verifications.json()["items"][0]["user_name"] == "Mechanical Student"
+    assert internships.status_code == 200
+    assert internships.json()["total"] == 1
+    assert internships.json()["items"][0]["student_name"] == "Mechanical Student"
+    assert analytics.status_code == 200
+    assert analytics.json()["total_users"] == 1
+    assert analytics.json()["total_internships"] == 1
 
 
 @pytest.mark.asyncio
