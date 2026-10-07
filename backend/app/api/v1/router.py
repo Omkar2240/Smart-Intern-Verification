@@ -12,6 +12,7 @@ from app.api.v1.companies.router import router as companies_router
 from app.api.v1.attendance.router import router as attendance_router
 from app.api.v1.admin.router import router as admin_router
 from app.api.v1.admin.attendance import router as admin_attendance_router
+from app.api.v1.admin.super_admin import router as super_admin_router
 from app.api.v1.internships.router import router as internships_router
 
 router = APIRouter(prefix="/api/v1")
@@ -24,4 +25,5 @@ router.include_router(companies_router)
 router.include_router(attendance_router)
 router.include_router(admin_router)
 router.include_router(admin_attendance_router)
+router.include_router(super_admin_router)
 router.include_router(internships_router)

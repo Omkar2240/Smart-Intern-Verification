@@ -169,3 +169,108 @@ class AdminAttendanceAnalytics(BaseModel):
     late_today: int
     monthly_trend: list[dict]
     department_breakdown: list[dict]
+
+
+class AdminDepartmentCreate(BaseModel):
+    college_id: UUID
+    name: str = Field(..., min_length=2, max_length=255)
+    code: str = Field(..., min_length=1, max_length=50)
+    hod_name: str | None = Field(None, max_length=255)
+    hod_email: str | None = Field(None, max_length=320)
+
+
+class AdminDepartmentUpdate(BaseModel):
+    name: str | None = Field(None, min_length=2, max_length=255)
+    code: str | None = Field(None, min_length=1, max_length=50)
+    hod_name: str | None = Field(None, max_length=255)
+    hod_email: str | None = Field(None, max_length=320)
+    is_active: bool | None = None
+
+
+class AdminDepartmentResponse(BaseModel):
+    id: UUID
+    college_id: UUID
+    name: str
+    code: str
+    hod_name: str | None
+    hod_email: str | None
+    is_active: bool
+    student_count: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminListResponse(BaseModel):
+    total: int
+    items: list
+    page: int = 1
+    page_size: int = 20
+
+
+class AdminUserCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=255)
+    email: str
+    role: str
+    college_id: UUID | None = None
+    department_id: UUID | None = None
+    password: str = Field(..., min_length=8, max_length=128)
+
+
+class AdminUserResponse(BaseModel):
+    id: UUID
+    name: str
+    email: str
+    role: str
+    college_id: UUID | None
+    department_id: UUID | None
+    is_active: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminStatusUpdate(BaseModel):
+    is_active: bool
+
+
+class AdminStudentResponse(BaseModel):
+    id: UUID
+    name: str
+    email: str
+    registration_number: str
+    mobile_number: str
+    college_id: UUID | None
+    college_name: str | None
+    department_id: UUID | None
+    department_name: str | None
+    verification_status: str
+    internship_status: str
+    is_verified: bool
+    created_at: datetime
+
+
+class AdminAuditLogResponse(BaseModel):
+    id: UUID
+    admin_id: UUID
+    action: str
+    target_user_id: UUID | None
+    details: dict | None
+    ip_address: str | None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminSystemConfigResponse(BaseModel):
+    key: str
+    value: dict
+    description: str | None
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminSystemConfigUpdate(BaseModel):
+    key: str = Field(..., min_length=1, max_length=100)
+    value: dict
+    description: str | None = Field(None, max_length=255)

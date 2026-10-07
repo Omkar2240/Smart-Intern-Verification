@@ -21,6 +21,8 @@ class College(Base, UUIDMixin, TimestampMixin):
 
     # Relationships
     verifications = relationship("IdentityVerification", back_populates="college")
+    departments = relationship("Department", back_populates="college", cascade="all, delete-orphan")
+    users = relationship("User", back_populates="college", foreign_keys="User.college_id")
 
     def __repr__(self) -> str:
         return f"<College {self.name} ({self.code})>"
