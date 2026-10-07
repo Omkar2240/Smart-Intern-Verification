@@ -9,7 +9,7 @@ from uuid import UUID
 from typing import BinaryIO
 
 from fastapi import HTTPException, status
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, false
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -20,6 +20,7 @@ from app.models.face_embedding import FaceEmbedding
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.college_student_roster import CollegeStudentRoster
 from app.models.internship import Internship
+from app.models.department import Department
 from app.schemas.internship import InternshipResponse
 from app.schemas.admin import (
     AdminVerificationItem,
@@ -39,6 +40,17 @@ from app.core.constants import (
     PENDING_STATUS,
     COLLEGE_STATUS,
 )
+
+
+def _admin_user_scope(admin_user: User):
+    """Return the user predicates allowed for an admin's dashboard."""
+    if admin_user.role in ("admin", "super_admin"):
+        return []
+    if admin_user.role == "department_admin":
+        return [User.department_id == admin_user.department_id] if admin_user.department_id else [false()]
+    if admin_user.role == "college_admin":
+        return [User.college_id == admin_user.college_id] if admin_user.college_id else [false()]
+    return [false()]
 
 
 class AdminService:
@@ -512,39 +524,75 @@ class AdminService:
         )
 
     @staticmethod
-    async def get_analytics_summary(db: AsyncSession) -> AdminAnalyticsSummary:
+    async def get_analytics_summary(
+        db: AsyncSession,
+        admin_user: User,
+    ) -> AdminAnalyticsSummary:
         """
-        Retrieve high-level verification dashboard KPIs.
+        Retrieve high-level verification dashboard KPIs for the admin's scope.
         """
-        total_users = (await db.execute(select(func.count(User.id)))).scalar() or 0
+        scope = _admin_user_scope(admin_user)
+        total_users = (await db.execute(select(func.count(User.id)).where(*scope))).scalar() or 0
         verified_users = (
             await db.execute(
-                select(func.count(IdentityVerification.id)).where(IdentityVerification.overall_status == VERIFICATION_STATUS[2])  # verified
+                select(func.count(IdentityVerification.id))
+                .join(IdentityVerification.user)
+                .where(
+                    IdentityVerification.overall_status == VERIFICATION_STATUS[2],
+                    *scope,
+                )
             )
         ).scalar() or 0
         pending_reviews = (
             await db.execute(
-                select(func.count(IdentityVerification.id)).where(IdentityVerification.college_id_status == COLLEGE_ID_STATUS[4])  # manual_review
+                select(func.count(IdentityVerification.id))
+                .join(IdentityVerification.user)
+                .where(
+                    IdentityVerification.college_id_status == COLLEGE_ID_STATUS[4],
+                    *scope,
+                )
             )
         ).scalar() or 0
         rejected_verifications = (
             await db.execute(
-                select(func.count(IdentityVerification.id)).where(IdentityVerification.overall_status == VERIFICATION_STATUS[3])  # rejected
+                select(func.count(IdentityVerification.id))
+                .join(IdentityVerification.user)
+                .where(
+                    IdentityVerification.overall_status == VERIFICATION_STATUS[3],
+                    *scope,
+                )
             )
         ).scalar() or 0
-        active_colleges = (
-            await db.execute(select(func.count(College.id)).where(College.is_active == True))  # noqa: E712
-        ).scalar() or 0
+        college_scope = [College.is_active == True]  # noqa: E712
+        if admin_user.role == "college_admin":
+            college_scope.append(College.id == admin_user.college_id)
+        elif admin_user.role == "department_admin":
+            college_scope.extend(
+                [Department.id == admin_user.department_id]
+            )
+        college_query = select(func.count(College.id)).where(*college_scope)
+        if admin_user.role == "department_admin":
+            college_query = college_query.join(Department)
+        active_colleges = (await db.execute(college_query)).scalar() or 0
 
-        total_internships = (await db.execute(select(func.count(Internship.id)))).scalar() or 0
+        internship_scope = (
+            select(func.count(Internship.id))
+            .join(Internship.user)
+            .where(*scope)
+        )
+        total_internships = (await db.execute(internship_scope)).scalar() or 0
         pending_internships = (
             await db.execute(
-                select(func.count(Internship.id)).where(Internship.status == PENDING_STATUS)  # pending
+                select(func.count(Internship.id))
+                .join(Internship.user)
+                .where(Internship.status == PENDING_STATUS, *scope)
             )
         ).scalar() or 0
         verified_internships = (
             await db.execute(
-                select(func.count(Internship.id)).where(Internship.status == VERIFICATION_STATUS[2])  # verified
+                select(func.count(Internship.id))
+                .join(Internship.user)
+                .where(Internship.status == VERIFICATION_STATUS[2], *scope)
             )
         ).scalar() or 0
 
@@ -561,12 +609,22 @@ class AdminService:
 
     @staticmethod
     async def create_college(db: AsyncSession, data: AdminCollegeCreate) -> College:
+        normalized_code = data.code.strip().upper() if data.code else None
+        if normalized_code:
+            existing = await db.execute(
+                select(College).where(College.code == normalized_code)
+            )
+            if existing.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="College code already exists",
+                )
         college = College(
-            name=data.name,
-            city=data.city,
-            state=data.state,
-            country=data.country,
-            code=data.code,
+            name=data.name.strip(),
+            city=data.city.strip(),
+            state=data.state.strip(),
+            country=data.country.strip(),
+            code=normalized_code,
             is_active=True,
         )
         db.add(college)
@@ -581,7 +639,24 @@ class AdminService:
         if not college:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="College not found")
 
-        for key, value in data.model_dump(exclude_unset=True).items():
+        values = data.model_dump(exclude_unset=True)
+        if "code" in values:
+            values["code"] = values["code"].strip().upper() if values["code"] else None
+            if values["code"]:
+                duplicate = await db.execute(
+                    select(College).where(
+                        College.code == values["code"], College.id != college.id
+                    )
+                )
+                if duplicate.scalar_one_or_none():
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="College code already exists",
+                    )
+
+        for key, value in values.items():
+            if isinstance(value, str):
+                value = value.strip()
             setattr(college, key, value)
 
         await db.commit()

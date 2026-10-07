@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.constants import ATTENDANCE_STATUSES
+from app.services.admin_service import _admin_user_scope
 from app.models.attendance_record import AttendanceRecord
 from app.models.user import User
 from app.schemas.admin import (
@@ -130,13 +131,16 @@ async def attendance_analytics(
     db: AsyncSession,
     *,
     period: str,
+    admin_user: User,
 ) -> AdminAttendanceAnalytics:
     today = datetime.now(timezone.utc).date()
     days = {"week": 7, "month": 30, "quarter": 90, "year": 365}[period]
     start = today - timedelta(days=days - 1)
     records = (
         await db.execute(
-            select(AttendanceRecord).where(AttendanceRecord.date >= start)
+            select(AttendanceRecord)
+            .join(AttendanceRecord.student)
+            .where(AttendanceRecord.date >= start, *_admin_user_scope(admin_user))
         )
     ).scalars().all()
     present_today = sum(

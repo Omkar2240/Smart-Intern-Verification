@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_super_admin
 from app.models.user import User
+from app.schemas.college import CollegeListResponse
 from app.schemas.admin import (
     AdminAuditLogResponse, AdminDepartmentCreate, AdminDepartmentResponse,
     AdminDepartmentUpdate, AdminStatusUpdate, AdminStudentResponse,
@@ -21,6 +22,21 @@ from app.schemas.admin import (
 from app.services.super_admin_service import SuperAdminService
 
 router = APIRouter(prefix="/admin", tags=["Super Admin"])
+
+
+@router.get("/colleges", response_model=CollegeListResponse)
+async def list_colleges(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(require_super_admin)],
+    search: str | None = None,
+    include_inactive: bool = False,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    """List colleges for platform administration, including inactive records when requested."""
+    return await SuperAdminService.list_colleges(
+        db, search, include_inactive, page, page_size
+    )
 
 
 @router.get("/departments")

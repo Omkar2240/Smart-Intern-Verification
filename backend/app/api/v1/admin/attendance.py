@@ -42,4 +42,4 @@ async def get_admin_attendance_analytics(
     db: Annotated[AsyncSession, Depends(get_db)],
     period: Annotated[str, Query(pattern="^(week|month|quarter|year)$")] = "month",
 ):
-    return await attendance_analytics(db, period=period)
+    return await attendance_analytics(db, period=period, admin_user=current_admin)

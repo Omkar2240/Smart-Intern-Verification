@@ -35,6 +35,38 @@ def _not_found(detail: str) -> HTTPException:
 
 class SuperAdminService:
     @staticmethod
+    async def list_colleges(
+        db: AsyncSession, search: str | None, include_inactive: bool, page: int, page_size: int
+    ) -> dict:
+        conditions = []
+        if not include_inactive:
+            conditions.append(College.is_active.is_(True))
+        if search and search.strip():
+            term = f"%{search.strip()}%"
+            conditions.append(
+                or_(
+                    College.name.ilike(term),
+                    College.city.ilike(term),
+                    College.state.ilike(term),
+                    College.code.ilike(term),
+                )
+            )
+
+        predicate = and_(*conditions) if conditions else None
+        count_stmt = select(func.count(College.id))
+        query = select(College).order_by(College.name.asc())
+        if predicate is not None:
+            count_stmt = count_stmt.where(predicate)
+            query = query.where(predicate)
+        total = (await db.execute(count_stmt)).scalar_one()
+        rows = (
+            await db.execute(
+                query.offset((page - 1) * page_size).limit(page_size)
+            )
+        ).scalars().all()
+        return {"total": total, "page": page, "page_size": page_size, "items": rows}
+
+    @staticmethod
     async def list_departments(
         db: AsyncSession, college_id: UUID | None, search: str | None, page: int, page_size: int
     ) -> dict:
@@ -77,7 +109,7 @@ class SuperAdminService:
     @staticmethod
     async def create_department(db: AsyncSession, data: AdminDepartmentCreate) -> Department:
         college = await db.get(College, data.college_id)
-        if not college:
+        if not college or not college.is_active:
             raise _not_found("College not found")
         duplicate = await db.execute(
             select(Department).where(

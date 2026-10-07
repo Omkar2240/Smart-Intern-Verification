@@ -305,7 +305,7 @@ async def get_analytics_summary(
     """
     Retrieve verification KPIs and metrics for the admin dashboard.
     """
-    return await AdminService.get_analytics_summary(db)
+    return await AdminService.get_analytics_summary(db, current_admin)
 
 
 @router.post("/colleges", response_model=CollegeResponse, status_code=status.HTTP_201_CREATED)
