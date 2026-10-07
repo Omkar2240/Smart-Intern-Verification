@@ -56,6 +56,8 @@ VERIFICATION_STATUS = (
 
 # Default verification statuses
 DEFAULT_VERIFICATION_STATUS = "not_started"
+DEFAULT_INTERNSHIP_STATUS = "not_started"
+COMPLETED_INTERNSHIP_STATUS = "completed"
 DEFAULT_COLLEGE_STATUS = "not_started"
 DEFAULT_COLLEGE_ID_STATUS = "not_started"
 DEFAULT_FACE_STATUS = "not_started"
@@ -118,6 +120,10 @@ ADMIN_ROLES = (
 
 # Default values
 DEFAULT_USER_ROLE = "student"
+DEPARTMENT_ADMIN_ROLE = "department_admin"
+COLLEGE_ADMIN_ROLE = "college_admin"
+PLATFORM_ADMIN_ROLE = "admin"
+SUPER_ADMIN_ROLE = "super_admin"
 DEFAULT_COUNTRY = "India"
 
 

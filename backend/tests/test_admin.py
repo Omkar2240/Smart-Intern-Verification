@@ -65,6 +65,46 @@ async def test_admin_access_control(client: AsyncClient, db_session: AsyncSessio
 
 
 @pytest.mark.asyncio
+async def test_admin_student_create_and_update_with_role_scoping(
+    client: AsyncClient, db_session: AsyncSession
+):
+    college = College(
+        name="Student College", city="Pune", state="Maharashtra",
+        country="India", code="SC", is_active=True,
+    )
+    db_session.add(college)
+    await db_session.flush()
+    department = Department(
+        college_id=college.id, name="Computer Science", code="CSE", is_active=True
+    )
+    db_session.add(department)
+    await db_session.flush()
+
+    college_admin, college_token = await create_admin_user(db_session, "college_admin")
+    college_admin.college_id = college.id
+    await db_session.commit()
+
+    create_response = await client.post(
+        "/api/v1/admin/students",
+        json={"name": "New Student", "department_id": str(department.id), "registration_number": "SC-001"},
+        headers={"Authorization": f"Bearer {college_token}"},
+    )
+    assert create_response.status_code == 201
+    created = create_response.json()
+    assert created["college_id"] == str(college.id)
+    assert created["department_id"] == str(department.id)
+    assert created["registration_number"] == "SC-001"
+
+    update_response = await client.patch(
+        f"/api/v1/admin/students/{created['id']}",
+        json={"email": "student@example.com", "mobile_number": "9876543210"},
+        headers={"Authorization": f"Bearer {college_token}"},
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["email"] == "student@example.com"
+
+
+@pytest.mark.asyncio
 async def test_admin_list_verifications_and_filtering(client: AsyncClient, db_session: AsyncSession):
     """Test listing verifications with status and search filters."""
     _, admin_token = await create_admin_user(db_session)

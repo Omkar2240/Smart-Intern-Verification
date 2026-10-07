@@ -404,6 +404,24 @@ List all students across the platform.
 
 ---
 
+### POST /api/v1/admin/students
+Create a student record.
+
+**Access:** `super_admin`, `admin`, `college_admin`
+
+Platform admins must provide `name`, `college_id`, and `department_id`.
+College admins must provide `name`, `department_id`, and `registration_number`;
+`college_id` is always taken from the signed-in college admin. Email, mobile
+number, and password may be added later through the edit endpoint.
+
+### PATCH /api/v1/admin/students/{student_id}
+Edit a student record. The same fields can be supplied as needed:
+`name`, `email`, `registration_number`, `mobile_number`, `password`,
+`college_id`, and `department_id`. College admins can only edit students in
+their own college.
+
+---
+
 ## Verification Management
 
 ### GET /api/v1/admin/verifications

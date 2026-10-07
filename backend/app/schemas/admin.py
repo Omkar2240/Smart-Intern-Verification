@@ -254,11 +254,21 @@ class AdminStudentResponse(BaseModel):
 
 class AdminStudentCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=255)
-    email: EmailStr
-    registration_number: str = Field(..., min_length=3, max_length=50)
-    mobile_number: str = Field(..., min_length=7, max_length=20)
-    password: str = Field(..., min_length=8, max_length=128)
-    college_id: UUID
+    email: EmailStr | None = None
+    registration_number: str | None = Field(None, min_length=3, max_length=50)
+    mobile_number: str | None = Field(None, min_length=7, max_length=20)
+    password: str | None = Field(None, min_length=8, max_length=128)
+    college_id: UUID | None = None
+    department_id: UUID | None = None
+
+
+class AdminStudentUpdate(BaseModel):
+    name: str | None = Field(None, min_length=2, max_length=255)
+    email: EmailStr | None = None
+    registration_number: str | None = Field(None, min_length=3, max_length=50)
+    mobile_number: str | None = Field(None, min_length=7, max_length=20)
+    password: str | None = Field(None, min_length=8, max_length=128)
+    college_id: UUID | None = None
     department_id: UUID | None = None
 
 

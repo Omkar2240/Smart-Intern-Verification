@@ -16,6 +16,12 @@ export const INTERNSHIP_STAGE = {
   REJECTED: "rejected",
 } as const;
 
+export const INTERNSHIP_STATUS = {
+  ACTIVE: "active",
+  COMPLETED: "completed",
+  NOT_STARTED: "not_started",
+} as const;
+
 // User account status
 export const USER_STATUS = {
   ACTIVE: "active",

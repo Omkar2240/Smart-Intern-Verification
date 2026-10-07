@@ -8,7 +8,17 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.constants import ADMIN_ROLES
+from app.core.constants import (
+    ADMIN_ROLES,
+    ACTIVE_STATUS,
+    COLLEGE_ADMIN_ROLE,
+    DEPARTMENT_ADMIN_ROLE,
+    DEFAULT_INTERNSHIP_STATUS,
+    DEFAULT_USER_ROLE,
+    DEFAULT_VERIFICATION_STATUS,
+    COMPLETED_INTERNSHIP_STATUS,
+    SUPER_ADMIN_ROLE,
+)
 from app.core.security import hash_password
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.college import College
@@ -24,6 +34,7 @@ from app.schemas.admin import (
     AdminDepartmentUpdate,
     AdminStudentCreate,
     AdminStudentResponse,
+    AdminStudentUpdate,
     AdminSystemConfigResponse,
     AdminUserCreate,
     AdminUserResponse,
@@ -73,13 +84,13 @@ class SuperAdminService:
         page_size: int, actor: User | None = None,
     ) -> dict:
         conditions = []
-        if actor and actor.role in ("college_admin", "department_admin"):
+        if actor and actor.role in (COLLEGE_ADMIN_ROLE, DEPARTMENT_ADMIN_ROLE):
             if not actor.college_id:
                 raise HTTPException(status_code=403, detail="College admin is not assigned to a college")
             if college_id and college_id != actor.college_id:
                 raise HTTPException(status_code=403, detail="You can only access your college")
             college_id = actor.college_id
-            if actor.role == "department_admin":
+            if actor.role == DEPARTMENT_ADMIN_ROLE:
                 if not actor.department_id:
                     raise HTTPException(
                         status_code=403,
@@ -110,7 +121,7 @@ class SuperAdminService:
             student_count = (
                 await db.execute(
                     select(func.count(User.id)).where(
-                        User.department_id == row.id, User.role == "student"
+                        User.department_id == row.id, User.role == DEFAULT_USER_ROLE
                     )
                 )
             ).scalar_one()
@@ -133,7 +144,7 @@ class SuperAdminService:
     async def create_department(
         db: AsyncSession, data: AdminDepartmentCreate, actor: User | None = None
     ) -> Department:
-        if actor and actor.role == "college_admin" and actor.college_id != data.college_id:
+        if actor and actor.role == COLLEGE_ADMIN_ROLE and actor.college_id != data.college_id:
             raise HTTPException(status_code=403, detail="You can only manage your college")
         college = await db.get(College, data.college_id)
         if not college or not college.is_active:
@@ -165,9 +176,9 @@ class SuperAdminService:
         department = await db.get(Department, department_id)
         if not department:
             raise _not_found("Department not found")
-        if actor and actor.role == "college_admin" and actor.college_id != department.college_id:
+        if actor and actor.role == COLLEGE_ADMIN_ROLE and actor.college_id != department.college_id:
             raise HTTPException(status_code=403, detail="You can only manage your college")
-        if actor and actor.role == "department_admin":
+        if actor and actor.role == DEPARTMENT_ADMIN_ROLE:
             if not actor.department_id:
                 raise HTTPException(
                     status_code=403,
@@ -199,7 +210,7 @@ class SuperAdminService:
         page: int, page_size: int, actor: User | None = None,
     ) -> dict:
         conditions = [User.role.in_(ADMIN_ROLES)]
-        if actor and actor.role == "college_admin":
+        if actor and actor.role == COLLEGE_ADMIN_ROLE:
             if not actor.college_id:
                 raise HTTPException(status_code=403, detail="College admin is not assigned to a college")
             if college_id and college_id != actor.college_id:
@@ -233,12 +244,12 @@ class SuperAdminService:
     async def create_admin(
         db: AsyncSession, data: AdminUserCreate, actor: User | None = None
     ) -> User:
-        if data.role not in ADMIN_ROLES or data.role == "super_admin":
+        if data.role not in ADMIN_ROLES or data.role == SUPER_ADMIN_ROLE:
             raise HTTPException(status_code=400, detail="Only college_admin, department_admin, and admin users can be created")
-        if actor and actor.role == "college_admin":
+        if actor and actor.role == COLLEGE_ADMIN_ROLE:
             if not actor.college_id:
                 raise HTTPException(status_code=403, detail="College admin is not assigned to a college")
-            if data.role != "department_admin":
+            if data.role != DEPARTMENT_ADMIN_ROLE:
                 raise HTTPException(
                     status_code=403,
                     detail="College admins can only create department admins for their college",
@@ -256,7 +267,7 @@ class SuperAdminService:
                 raise HTTPException(status_code=400, detail="Department does not belong to the selected college")
             if not data.college_id:
                 data.college_id = department.college_id
-        if actor and actor.role == "college_admin" and data.department_id:
+        if actor and actor.role == COLLEGE_ADMIN_ROLE and data.department_id:
             department = await db.get(Department, data.department_id)
             if not department or department.college_id != actor.college_id:
                 raise HTTPException(status_code=403, detail="Department does not belong to your college")
@@ -293,14 +304,14 @@ class SuperAdminService:
         verification_status: str | None, search: str | None, page: int, page_size: int,
         actor: User | None = None,
     ) -> dict:
-        conditions = [User.role == "student"]
-        if actor and actor.role == "college_admin":
+        conditions = [User.role == DEFAULT_USER_ROLE]
+        if actor and actor.role == COLLEGE_ADMIN_ROLE:
             if not actor.college_id:
                 raise HTTPException(status_code=403, detail="College admin is not assigned to a college")
             if college_id and college_id != actor.college_id:
                 raise HTTPException(status_code=403, detail="You can only access your college")
             college_id = actor.college_id
-        elif actor and actor.role == "department_admin":
+        elif actor and actor.role == DEPARTMENT_ADMIN_ROLE:
             if not actor.college_id or not actor.department_id:
                 raise HTTPException(
                     status_code=403,
@@ -335,7 +346,7 @@ class SuperAdminService:
         rows = (await db.execute(base.order_by(User.created_at.desc()).offset((page - 1) * page_size).limit(page_size))).scalars().unique().all()
         items = []
         for row in rows:
-            internship_status = "active" if any(i.is_active for i in row.internships) else ("completed" if row.internships else "not_started")
+            internship_status = ACTIVE_STATUS if any(i.is_active for i in row.internships) else (COMPLETED_INTERNSHIP_STATUS if row.internships else DEFAULT_INTERNSHIP_STATUS)
             effective_college = row.college
             if not effective_college and row.identity_verification:
                 effective_college = row.identity_verification.college
@@ -345,7 +356,7 @@ class SuperAdminService:
                 college_id=effective_college.id if effective_college else None,
                 college_name=effective_college.name if effective_college else None,
                 department_id=row.department_id, department_name=row.department.name if row.department else None,
-                verification_status=row.identity_verification.overall_status if row.identity_verification else "not_started",
+                verification_status=row.identity_verification.overall_status if row.identity_verification else DEFAULT_VERIFICATION_STATUS,
                 internship_status=internship_status, is_verified=row.is_verified, created_at=row.created_at,
             ))
         return {"total": total, "page": page, "page_size": page_size, "items": items}
@@ -354,22 +365,34 @@ class SuperAdminService:
     async def create_student(
         db: AsyncSession, data: AdminStudentCreate, actor: User
     ) -> AdminStudentResponse:
-        if actor.role == "college_admin" and actor.college_id != data.college_id:
+        if actor.role == COLLEGE_ADMIN_ROLE:
+            if not actor.college_id:
+                raise HTTPException(status_code=403, detail="College admin is not assigned to a college")
+            if data.college_id and actor.college_id != data.college_id:
+                raise HTTPException(status_code=403, detail="You can only create students for your college")
+            data.college_id = actor.college_id
+        if not data.college_id:
+            raise HTTPException(status_code=422, detail="College is required")
+        if not data.department_id:
+            raise HTTPException(status_code=422, detail="Department is required")
+        if actor.role == COLLEGE_ADMIN_ROLE and actor.college_id != data.college_id:
             raise HTTPException(status_code=403, detail="You can only create students for your college")
         college = await db.get(College, data.college_id)
         if not college or not college.is_active:
             raise _not_found("College not found")
         department = None
-        if data.department_id:
-            department = await db.get(Department, data.department_id)
-            if not department or department.college_id != data.college_id:
-                raise HTTPException(status_code=400, detail="Department does not belong to the selected college")
+        department = await db.get(Department, data.department_id)
+        if not department or department.college_id != data.college_id or not department.is_active:
+            raise HTTPException(status_code=400, detail="Department does not belong to the selected college")
+        registration_number = (data.registration_number or f"PENDING-{uuid.uuid4().hex}").strip()[:50]
+        email = (data.email or f"pending-{uuid.uuid4().hex}@student.local").lower().strip()
+        mobile_number = (data.mobile_number or f"pending-{uuid.uuid4().hex[:12]}").strip()
         duplicate = await db.execute(
             select(User).where(
                 or_(
-                    User.email == data.email.lower().strip(),
-                    User.registration_number == data.registration_number.strip(),
-                    User.mobile_number == data.mobile_number.strip(),
+                    User.email == email,
+                    User.registration_number == registration_number,
+                    User.mobile_number == mobile_number,
                 )
             )
         )
@@ -377,11 +400,11 @@ class SuperAdminService:
             raise HTTPException(status_code=409, detail="Email, registration number, or mobile number is already registered")
         student = User(
             name=data.name.strip(),
-            email=data.email.lower().strip(),
-            registration_number=data.registration_number.strip(),
-            mobile_number=data.mobile_number.strip(),
-            password_hash=hash_password(data.password),
-            role="student",
+            email=email,
+            registration_number=registration_number,
+            mobile_number=mobile_number,
+            password_hash=hash_password(data.password or uuid.uuid4().hex),
+            role=DEFAULT_USER_ROLE,
             college_id=data.college_id,
             department_id=data.department_id,
             is_active=True,
@@ -396,7 +419,95 @@ class SuperAdminService:
             mobile_number=student.mobile_number, college_id=student.college_id,
             college_name=college.name, department_id=student.department_id,
             department_name=department.name if department else None,
-            verification_status="not_started", internship_status="not_started",
+            verification_status=DEFAULT_VERIFICATION_STATUS,
+            internship_status=DEFAULT_INTERNSHIP_STATUS,
+            is_verified=student.is_verified, created_at=student.created_at,
+        )
+
+    @staticmethod
+    async def update_student(
+        db: AsyncSession, student_id: UUID, data: AdminStudentUpdate, actor: User
+    ) -> AdminStudentResponse:
+        student = await db.get(User, student_id)
+        if not student or student.role != DEFAULT_USER_ROLE:
+            raise _not_found("Student not found")
+        if actor.role == COLLEGE_ADMIN_ROLE:
+            if not actor.college_id or student.college_id != actor.college_id:
+                raise HTTPException(status_code=403, detail="You can only manage students in your college")
+            if data.college_id and data.college_id != actor.college_id:
+                raise HTTPException(status_code=403, detail="You can only assign students to your college")
+
+        values = data.model_dump(exclude_unset=True)
+        if "college_id" in values and values["college_id"] is None:
+            raise HTTPException(status_code=422, detail="College cannot be cleared")
+        if "department_id" in values and values["department_id"] is None:
+            raise HTTPException(status_code=422, detail="Department cannot be cleared")
+        target_college_id = values.get("college_id", student.college_id)
+        target_department_id = values.get("department_id", student.department_id)
+        if not target_college_id:
+            raise HTTPException(status_code=422, detail="College is required")
+        if not target_department_id:
+            raise HTTPException(status_code=422, detail="Department is required")
+        college = await db.get(College, target_college_id)
+        department = await db.get(Department, target_department_id)
+        if not college or not college.is_active:
+            raise _not_found("College not found")
+        if not department or not department.is_active or department.college_id != target_college_id:
+            raise HTTPException(status_code=400, detail="Department does not belong to the selected college")
+
+        normalized = {}
+        for key, value in values.items():
+            if key == "password":
+                normalized["password_hash"] = hash_password(value)
+            elif key in {"name", "registration_number", "mobile_number"}:
+                normalized[key] = value.strip()
+            elif key == "email":
+                normalized[key] = value.lower().strip()
+            else:
+                normalized[key] = value
+        normalized["college_id"] = target_college_id
+        normalized["department_id"] = target_department_id
+        duplicate_fields = [
+            getattr(User, key) == value
+            for key, value in normalized.items()
+            if key in {"email", "registration_number", "mobile_number"}
+        ]
+        if duplicate_fields:
+            duplicate = await db.execute(
+                select(User).where(User.id != student.id, or_(*duplicate_fields))
+            )
+            if duplicate.scalar_one_or_none():
+                raise HTTPException(status_code=409, detail="Email, registration number, or mobile number is already registered")
+        for key, value in normalized.items():
+            setattr(student, key, value)
+        await db.commit()
+        refreshed = await db.execute(
+            select(User)
+            .options(
+                selectinload(User.college),
+                selectinload(User.department),
+                selectinload(User.identity_verification),
+                selectinload(User.internships),
+            )
+            .where(User.id == student.id)
+        )
+        student = refreshed.scalar_one()
+        internship_status = (
+            ACTIVE_STATUS
+            if any(internship.is_active for internship in student.internships)
+            else (COMPLETED_INTERNSHIP_STATUS if student.internships else DEFAULT_INTERNSHIP_STATUS)
+        )
+        return AdminStudentResponse(
+            id=student.id, name=student.name, email=student.email,
+            registration_number=student.registration_number, mobile_number=student.mobile_number,
+            college_id=student.college_id, college_name=college.name,
+            department_id=student.department_id, department_name=department.name,
+            verification_status=(
+                student.identity_verification.overall_status
+                if student.identity_verification
+                else DEFAULT_VERIFICATION_STATUS
+            ),
+            internship_status=internship_status,
             is_verified=student.is_verified, created_at=student.created_at,
         )
 

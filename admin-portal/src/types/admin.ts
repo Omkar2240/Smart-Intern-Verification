@@ -258,6 +258,18 @@ export interface StudentListResponse {
   page_size: number;
 }
 
+export interface CreateStudentPayload {
+  name: string;
+  registration_number?: string;
+  email?: string;
+  mobile_number?: string;
+  password?: string;
+  college_id?: string;
+  department_id: string;
+}
+
+export type UpdateStudentPayload = Partial<CreateStudentPayload>;
+
 // ─── Attendance ─────────────────────────────────────────────────────────────────
 
 export interface AttendanceRecord {

@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import {
-  Users, Search, CheckCircle2, Clock, XCircle, AlertTriangle, Briefcase,
+  Users, Search, CheckCircle2, AlertTriangle, Briefcase, Plus, Pencil, X,
 } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
@@ -15,30 +15,45 @@ import { useAdminAuth } from "@/context/AdminAuthContext";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useApi } from "@/hooks/useApi";
 import { api } from "@/lib/api";
-import type { StudentListResponse, College } from "@/types/admin";
+import type { Student, StudentListResponse, College, Department, CreateStudentPayload } from "@/types/admin";
+import { ROLE } from "@/constants/roles.constants";
+import { INTERNSHIP_STATUS, VERIFICATION_STATUS } from "@/constants/status.constants";
 import { clsx } from "clsx";
 
 interface Props {
   initialData: StudentListResponse | null;
   colleges: College[];
+  departments?: Department[];
 }
 
 const INTERNSHIP_STATUS_COLORS: Record<string, string> = {
-  active: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  completed: "bg-blue-50 text-blue-700 border-blue-200",
-  not_started: "bg-slate-50 text-slate-500 border-slate-200",
+  [INTERNSHIP_STATUS.ACTIVE]: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  [INTERNSHIP_STATUS.COMPLETED]: "bg-blue-50 text-blue-700 border-blue-200",
+  [INTERNSHIP_STATUS.NOT_STARTED]: "bg-slate-50 text-slate-500 border-slate-200",
 };
 
-export function StudentsClient({ initialData, colleges }: Props) {
+export function StudentsClient({
+  initialData,
+  colleges,
+  departments: initialDepartments = [],
+}: Props) {
   const { user } = useAdminAuth();
-  const role = user?.role ?? "department_admin";
-  const isPlatformAdmin = role === "super_admin" || role === "admin";
+  const role = user?.role ?? ROLE.DEPARTMENT_ADMIN;
+  const isPlatformAdmin = role === ROLE.SUPER_ADMIN || role === ROLE.ADMIN;
 
   const [search, setSearch] = useState("");
   const [verificationFilter, setVerificationFilter] = useState("all");
   const [internshipFilter, setInternshipFilter] = useState("all");
   const [collegeFilter, setCollegeFilter] = useState("");
   const [page, setPage] = useState(1);
+  const [studentModal, setStudentModal] = useState<Student | null | "create">(null);
+  const [departments] = useState<Department[]>(() => initialDepartments ?? []);
+  const [form, setForm] = useState<CreateStudentPayload>({
+    name: "", registration_number: "", email: "", mobile_number: "",
+    password: "", department_id: "",
+  });
+  const [formError, setFormError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const debouncedSearch = useDebounce(search, 350);
 
@@ -56,13 +71,75 @@ export function StudentsClient({ initialData, colleges }: Props) {
   const items = data?.items ?? initialData?.items ?? [];
   const total = data?.total ?? initialData?.total ?? 0;
 
-  const verified = items.filter((s) => s.verification_status === "verified").length;
-  const pending = items.filter((s) => s.verification_status === "pending" || s.verification_status === "manual_review").length;
-  const activeInterns = items.filter((s) => s.internship_status === "active").length;
+  const verified = items.filter((s) => s.verification_status === VERIFICATION_STATUS.VERIFIED).length;
+  const pending = items.filter((s) => s.verification_status === VERIFICATION_STATUS.PENDING || s.verification_status === VERIFICATION_STATUS.MANUAL_REVIEW).length;
+  const activeInterns = items.filter((s) => s.internship_status === INTERNSHIP_STATUS.ACTIVE).length;
+  const formDepartments = form.college_id
+    ? departments.filter((department) => department.college_id === form.college_id)
+    : departments;
 
   const resetFilters = () => {
     setSearch(""); setVerificationFilter("all");
     setInternshipFilter("all"); setCollegeFilter(""); setPage(1);
+  };
+
+  const openCreate = () => {
+    setForm({
+      name: "", registration_number: "", email: "", mobile_number: "",
+      password: "", department_id: "", college_id: isPlatformAdmin ? "" : (user?.college_id ?? undefined),
+    });
+    setFormError("");
+    setStudentModal("create");
+  };
+
+  const openEdit = (student: Student) => {
+    setForm({
+      name: student.name,
+      email: student.email,
+      registration_number: student.registration_number,
+      mobile_number: student.mobile_number ?? "",
+      department_id: student.department_id ?? "",
+      college_id: student.college_id ?? undefined,
+    });
+    setFormError("");
+    setStudentModal(student);
+  };
+
+  const updateForm = (key: keyof CreateStudentPayload, value: string) => {
+    setForm((current) => ({ ...current, [key]: value }));
+    if (key === "college_id") {
+      setForm((current) => ({ ...current, department_id: "" }));
+    }
+  };
+
+  const saveStudent = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setFormError("");
+    if (!form.name.trim() || !form.department_id) {
+      setFormError("Student name and department are required.");
+      return;
+    }
+    if (studentModal === "create" && !form.registration_number?.trim()) {
+      setFormError("Registration number is required when creating a student.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = Object.fromEntries(
+        Object.entries(form).filter(([, value]) => value !== undefined && value !== "")
+      ) as CreateStudentPayload;
+      if (studentModal === "create") {
+        await api.createStudent(payload);
+      } else if (studentModal) {
+        await api.updateStudent(studentModal.id, payload);
+      }
+      setStudentModal(null);
+      refetch();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Unable to save student.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -73,7 +150,7 @@ export function StudentsClient({ initialData, colleges }: Props) {
           title="Student Directory"
           description={
             isPlatformAdmin ? "All registered students platform-wide"
-              : role === "college_admin" ? "Students in your college"
+              : role === ROLE.COLLEGE_ADMIN ? "Students in your college"
               : "Students in your department"
           }
         />
@@ -107,6 +184,11 @@ export function StudentsClient({ initialData, colleges }: Props) {
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+              {(isPlatformAdmin || role === ROLE.COLLEGE_ADMIN) && (
+                <button onClick={openCreate} className="inline-flex items-center gap-1.5 rounded-xl bg-sky-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-sky-700 transition-colors">
+                  <Plus className="w-3.5 h-3.5" /> Add Student
+                </button>
+              )}
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
@@ -119,19 +201,19 @@ export function StudentsClient({ initialData, colleges }: Props) {
                   className="bg-white border border-slate-200 rounded-xl py-2 px-3 text-xs cursor-pointer focus:outline-none"
                 >
                   <option value="all">All Verifications</option>
-                  <option value="verified">Verified</option>
-                  <option value="pending">Pending</option>
-                  <option value="manual_review">Needs Review</option>
-                  <option value="rejected">Rejected</option>
-                  <option value="not_started">Not Started</option>
+                  <option value={VERIFICATION_STATUS.VERIFIED}>Verified</option>
+                  <option value={VERIFICATION_STATUS.PENDING}>Pending</option>
+                  <option value={VERIFICATION_STATUS.MANUAL_REVIEW}>Needs Review</option>
+                  <option value={VERIFICATION_STATUS.REJECTED}>Rejected</option>
+                  <option value={VERIFICATION_STATUS.NOT_STARTED}>Not Started</option>
                 </select>
                 <select value={internshipFilter} onChange={(e) => { setInternshipFilter(e.target.value); setPage(1); }}
                   className="bg-white border border-slate-200 rounded-xl py-2 px-3 text-xs cursor-pointer focus:outline-none"
                 >
                   <option value="all">All Internships</option>
-                  <option value="active">Active</option>
-                  <option value="completed">Completed</option>
-                  <option value="not_started">Not Started</option>
+                  <option value={INTERNSHIP_STATUS.ACTIVE}>Active</option>
+                  <option value={INTERNSHIP_STATUS.COMPLETED}>Completed</option>
+                  <option value={INTERNSHIP_STATUS.NOT_STARTED}>Not Started</option>
                 </select>
                 {isPlatformAdmin && colleges.length > 0 && (
                   <select value={collegeFilter} onChange={(e) => { setCollegeFilter(e.target.value); setPage(1); }}
@@ -151,7 +233,7 @@ export function StudentsClient({ initialData, colleges }: Props) {
               <table className="w-full text-xs">
                 <thead className="bg-slate-50/80 border-b border-slate-200">
                   <tr>
-                    {["Student", "Reg. No.", "College", "Department", "Verification", "Internship", "Attendance"].map((col) => (
+                    {["Student", "Reg. No.", "College", "Department", "Verification", "Internship", "Attendance", ...(isPlatformAdmin || role === ROLE.COLLEGE_ADMIN ? ["Actions"] : [])].map((col) => (
                       <th key={col} className="py-3 px-4 text-left font-mono text-[10px] text-slate-500 uppercase tracking-wider font-bold whitespace-nowrap">{col}</th>
                     ))}
                   </tr>
@@ -194,8 +276,8 @@ export function StudentsClient({ initialData, colleges }: Props) {
                             INTERNSHIP_STATUS_COLORS[student.internship_status] ?? "bg-slate-50 text-slate-500 border-slate-200"
                           )}>
                             <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                            {student.internship_status === "not_started" ? "Not Started"
-                              : student.internship_status === "active" ? "Active" : "Completed"}
+                            {student.internship_status === INTERNSHIP_STATUS.NOT_STARTED ? "Not Started"
+                              : student.internship_status === INTERNSHIP_STATUS.ACTIVE ? "Active" : "Completed"}
                           </span>
                         </td>
                         <td className="py-3.5 px-4">
@@ -211,6 +293,13 @@ export function StudentsClient({ initialData, colleges }: Props) {
                             </div>
                           ) : <span className="text-slate-400 text-[10px]">—</span>}
                         </td>
+                        {(isPlatformAdmin || role === ROLE.COLLEGE_ADMIN) && (
+                          <td className="py-3.5 px-4">
+                            <button onClick={() => openEdit(student)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold text-slate-500 hover:bg-sky-50 hover:text-sky-700">
+                              <Pencil className="w-3 h-3" /> Edit
+                            </button>
+                          </td>
+                        )}
                       </motion.tr>
                     ))
                   )}
@@ -222,6 +311,55 @@ export function StudentsClient({ initialData, colleges }: Props) {
           </motion.div>
         </main>
       </div>
+      {studentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" onMouseDown={(event) => event.target === event.currentTarget && setStudentModal(null)}>
+          <form onSubmit={saveStudent} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-slate-900">{studentModal === "create" ? "Add Student" : "Edit Student"}</h2>
+                <p className="mt-1 text-xs text-slate-500">Required fields are marked with an asterisk.</p>
+              </div>
+              <button type="button" onClick={() => setStudentModal(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="sm:col-span-2 text-xs font-semibold text-slate-600">Student name *
+                <input required value={form.name} onChange={(e) => updateForm("name", e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal outline-none focus:border-sky-500" />
+              </label>
+              {isPlatformAdmin && (
+                <label className="text-xs font-semibold text-slate-600">College *
+                  <select required value={form.college_id ?? ""} onChange={(e) => updateForm("college_id", e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal outline-none focus:border-sky-500">
+                    <option value="">Select college</option>
+                    {colleges.map((college) => <option key={college.id} value={college.id}>{college.name}</option>)}
+                  </select>
+                </label>
+              )}
+              <label className="text-xs font-semibold text-slate-600">Department *
+                <select required value={form.department_id} onChange={(e) => updateForm("department_id", e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal outline-none focus:border-sky-500">
+                  <option value="">Select department</option>
+                  {formDepartments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
+                </select>
+              </label>
+              <label className="text-xs font-semibold text-slate-600">Registration number *
+                <input required={studentModal === "create"} value={form.registration_number ?? ""} onChange={(e) => updateForm("registration_number", e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal outline-none focus:border-sky-500" />
+              </label>
+              <label className="text-xs font-semibold text-slate-600">Email
+                <input type="email" value={form.email ?? ""} onChange={(e) => updateForm("email", e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal outline-none focus:border-sky-500" />
+              </label>
+              <label className="text-xs font-semibold text-slate-600">Mobile number
+                <input value={form.mobile_number ?? ""} onChange={(e) => updateForm("mobile_number", e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal outline-none focus:border-sky-500" />
+              </label>
+              <label className="text-xs font-semibold text-slate-600 sm:col-span-2">Password
+                <input type="password" placeholder={studentModal === "create" ? "Optional; can be added later" : "Leave blank to keep current"} value={form.password ?? ""} onChange={(e) => updateForm("password", e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal outline-none focus:border-sky-500" />
+              </label>
+            </div>
+            {formError && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{formError}</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setStudentModal(null)} className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600">Cancel</button>
+              <button disabled={saving} className="rounded-xl bg-sky-600 px-4 py-2 text-xs font-bold text-white hover:bg-sky-700 disabled:opacity-50">{saving ? "Saving..." : "Save student"}</button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

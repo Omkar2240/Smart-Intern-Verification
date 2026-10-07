@@ -22,6 +22,7 @@ from app.schemas.college import CollegeListResponse
 from app.schemas.admin import (
     AdminAuditLogResponse, AdminDepartmentCreate, AdminDepartmentResponse,
     AdminDepartmentUpdate, AdminStatusUpdate, AdminStudentCreate, AdminStudentResponse,
+    AdminStudentUpdate,
     AdminSystemConfigResponse, AdminSystemConfigUpdate, AdminUserCreate, AdminUserResponse,
 )
 from app.services.super_admin_service import SuperAdminService
@@ -102,6 +103,16 @@ async def create_student(
     current_admin: Annotated[User, Depends(require_college_admin)],
 ):
     return await SuperAdminService.create_student(db, data, current_admin)
+
+
+@router.patch("/students/{student_id}", response_model=AdminStudentResponse)
+async def update_student(
+    student_id: UUID,
+    data: AdminStudentUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_admin: Annotated[User, Depends(require_college_admin)],
+):
+    return await SuperAdminService.update_student(db, student_id, data, current_admin)
 
 
 @router.get("/audit-logs")

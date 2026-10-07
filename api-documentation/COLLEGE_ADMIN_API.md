@@ -249,6 +249,22 @@ List all students in the college.
 
 ---
 
+### POST /api/v1/admin/students
+Create a student in the signed-in college.
+
+**Access:** `college_admin`
+
+Required fields are `name`, `department_id`, and `registration_number`.
+Email, mobile number, and password may be supplied now or added later with
+`PATCH /api/v1/admin/students/{student_id}`. The college is selected
+automatically from the authenticated college admin and cannot be changed.
+
+### PATCH /api/v1/admin/students/{student_id}
+Edit a student in the signed-in college. Supported fields are `name`, `email`,
+`registration_number`, `mobile_number`, `password`, and `department_id`.
+
+---
+
 ## Verification Management
 
 ### GET /api/v1/admin/verifications

@@ -39,15 +39,22 @@ from app.core.constants import (
     FACE_STATUS,
     PENDING_STATUS,
     COLLEGE_STATUS,
+    DEFAULT_USER_ROLE,
+    COLLEGE_ADMIN_ROLE,
+    DEPARTMENT_ADMIN_ROLE,
+    ADMIN_ROLES,
 )
 
 
 def _admin_user_scope(admin_user: User):
     """Return the user predicates allowed for an admin's dashboard."""
-    student_scope = [User.role == "student"]
-    if admin_user.role in ("admin", "super_admin"):
+    student_scope = [User.role == DEFAULT_USER_ROLE]
+    if admin_user.role in ADMIN_ROLES and admin_user.role not in (
+        COLLEGE_ADMIN_ROLE,
+        DEPARTMENT_ADMIN_ROLE,
+    ):
         return student_scope
-    if admin_user.role == "department_admin":
+    if admin_user.role == DEPARTMENT_ADMIN_ROLE:
         if not admin_user.department_id or not admin_user.college_id:
             return [false()]
         return [
@@ -55,9 +62,17 @@ def _admin_user_scope(admin_user: User):
             User.college_id == admin_user.college_id,
             User.department_id == admin_user.department_id,
         ]
-    if admin_user.role == "college_admin":
+    if admin_user.role == COLLEGE_ADMIN_ROLE:
         return (
-            [*student_scope, User.college_id == admin_user.college_id]
+            [
+                *student_scope,
+                or_(
+                    User.college_id == admin_user.college_id,
+                    User.identity_verification.has(
+                        IdentityVerification.college_id == admin_user.college_id
+                    ),
+                ),
+            ]
             if admin_user.college_id
             else [false()]
         )
