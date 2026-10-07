@@ -53,6 +53,7 @@ async def list_verifications(
         college_id=college_id,
         page=page,
         page_size=page_size,
+        admin_user=current_admin,
     )
 
 
@@ -235,6 +236,7 @@ async def list_admin_internships(
         college_id=college_id,
         page=page,
         page_size=page_size,
+        admin_user=current_admin,
     )
 
 

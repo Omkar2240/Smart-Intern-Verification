@@ -73,6 +73,7 @@ class AdminService:
         college_id: UUID | None = None,
         page: int = 1,
         page_size: int = 20,
+        admin_user: User | None = None,
     ) -> AdminVerificationListResponse:
         """
         List student verifications with filtering for the Admin Review Queue.
@@ -99,8 +100,31 @@ class AdminService:
             elif status_filter == VERIFICATION_STATUS[1]:  # pending
                 conditions.append(IdentityVerification.overall_status == VERIFICATION_STATUS[1])
 
+        if admin_user:
+            if admin_user.role in ("college_admin", "department_admin") and college_id:
+                if admin_user.college_id != college_id:
+                    raise HTTPException(status_code=403, detail="You can only access your college")
+            if admin_user.role == "college_admin":
+                if admin_user.college_id:
+                    conditions.extend(
+                        [
+                            User.role == "student",
+                            or_(
+                                User.college_id == admin_user.college_id,
+                                IdentityVerification.college_id == admin_user.college_id,
+                            ),
+                        ]
+                    )
+            else:
+                conditions.extend(_admin_user_scope(admin_user))
+
         if college_id:
-            conditions.append(IdentityVerification.college_id == college_id)
+            conditions.append(
+                or_(
+                    User.college_id == college_id,
+                    IdentityVerification.college_id == college_id,
+                )
+            )
 
         if search:
             search_pattern = f"%{search}%"
@@ -378,6 +402,7 @@ class AdminService:
         college_id: UUID | None = None,
         page: int = 1,
         page_size: int = 20,
+        admin_user: User | None = None,
     ) -> AdminInternshipListResponse:
         """
         List all student internships with filtering for admin oversight.
@@ -400,8 +425,31 @@ class AdminService:
         if status_filter and status_filter != "all":
             conditions.append(Internship.status == status_filter)
 
+        if admin_user:
+            if admin_user.role in ("college_admin", "department_admin") and college_id:
+                if admin_user.college_id != college_id:
+                    raise HTTPException(status_code=403, detail="You can only access your college")
+            if admin_user.role == "college_admin":
+                if admin_user.college_id:
+                    conditions.extend(
+                        [
+                            User.role == "student",
+                            or_(
+                                User.college_id == admin_user.college_id,
+                                IdentityVerification.college_id == admin_user.college_id,
+                            ),
+                        ]
+                    )
+            else:
+                conditions.extend(_admin_user_scope(admin_user))
+
         if college_id:
-            conditions.append(IdentityVerification.college_id == college_id)
+            conditions.append(
+                or_(
+                    User.college_id == college_id,
+                    IdentityVerification.college_id == college_id,
+                )
+            )
 
         if search:
             search_pattern = f"%{search}%"

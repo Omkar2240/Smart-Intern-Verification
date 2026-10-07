@@ -73,7 +73,7 @@ class SuperAdminService:
         page_size: int, actor: User | None = None,
     ) -> dict:
         conditions = []
-        if actor and actor.role == "college_admin":
+        if actor and actor.role in ("college_admin", "department_admin"):
             if not actor.college_id:
                 raise HTTPException(status_code=403, detail="College admin is not assigned to a college")
             if college_id and college_id != actor.college_id:
@@ -286,7 +286,12 @@ class SuperAdminService:
                 raise HTTPException(status_code=403, detail="You can only access your college")
             college_id = actor.college_id
         if college_id:
-            conditions.append(User.college_id == college_id)
+            conditions.append(
+                or_(
+                    User.college_id == college_id,
+                    IdentityVerification.college_id == college_id,
+                )
+            )
         if department_id:
             conditions.append(User.department_id == department_id)
         if verification_status:
@@ -303,10 +308,14 @@ class SuperAdminService:
         items = []
         for row in rows:
             internship_status = "active" if any(i.is_active for i in row.internships) else ("completed" if row.internships else "not_started")
+            effective_college = row.college
+            if not effective_college and row.identity_verification:
+                effective_college = row.identity_verification.college
             items.append(AdminStudentResponse(
                 id=row.id, name=row.name, email=row.email, registration_number=row.registration_number,
-                mobile_number=row.mobile_number, college_id=row.college_id,
-                college_name=row.college.name if row.college else None,
+                mobile_number=row.mobile_number,
+                college_id=effective_college.id if effective_college else None,
+                college_name=effective_college.name if effective_college else None,
                 department_id=row.department_id, department_name=row.department.name if row.department else None,
                 verification_status=row.identity_verification.overall_status if row.identity_verification else "not_started",
                 internship_status=internship_status, is_verified=row.is_verified, created_at=row.created_at,
