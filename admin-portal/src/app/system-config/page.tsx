@@ -1,26 +1,26 @@
-import { Header } from "@/components/Header";
-import { Sidebar } from "@/components/Sidebar";
+/**
+ * System Config page — SSR
+ */
+import { Suspense } from "react";
+import { serverApi } from "@/lib/serverApi";
+import { SystemConfigClient } from "./SystemConfigClient";
+import { Loader2 } from "lucide-react";
 
-export default function SystemConfigPage() {
+export const metadata = {
+  title: "System Configuration — TrackIntern Admin",
+  description: "Configure platform-wide system settings.",
+};
+
+export default async function SystemConfigPage() {
+  const config = await serverApi.getSystemConfig();
+
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 flex flex-col">
-        <Header
-          title="System Configuration"
-          description="Manage application settings, configurations, and system preferences"
-        />
-        <div className="flex-1 p-7">
-          <div className="max-w-4xl">
-            <div className="bg-white rounded-xl border border-slate-200 p-8">
-              <h2 className="text-lg font-bold text-slate-900 mb-4">System Settings</h2>
-              <p className="text-slate-600">
-                System configuration options will be displayed here.
-              </p>
-            </div>
-          </div>
-        </div>
-      </main>
-    </div>
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-sky-600" />
+      </div>
+    }>
+      <SystemConfigClient initialConfig={config} />
+    </Suspense>
   );
 }
