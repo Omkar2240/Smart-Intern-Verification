@@ -259,7 +259,7 @@ class AdminStudentCreate(BaseModel):
     mobile_number: str | None = Field(None, min_length=7, max_length=20)
     password: str | None = Field(None, min_length=8, max_length=128)
     college_id: UUID | None = None
-    department_id: UUID | None = None
+    department_id: UUID
 
 
 class AdminStudentUpdate(BaseModel):

@@ -28,6 +28,10 @@ class SelectCollegeRequest(BaseModel):
     college_id: UUID
 
 
+class SelectDepartmentRequest(BaseModel):
+    department_id: UUID
+
+
 class VerificationStepResponse(BaseModel):
     success: bool
     message: str

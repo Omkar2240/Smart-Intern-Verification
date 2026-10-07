@@ -88,8 +88,9 @@ FACE_STATUS = (
 # Verification workflow steps (for UI/UX)
 VERIFICATION_STEPS = (
     "college_selection",  # Step 1: Select college
-    "college_id",         # Step 2: Upload college ID
-    "face",               # Step 3: Face enrollment
+    "department_selection",  # Step 2: Select department
+    "college_id",         # Step 3: Upload college ID
+    "face",               # Step 4: Face enrollment
     "completed",          # Final: All steps complete
 )
 
