@@ -18,6 +18,7 @@ from app.core.constants import (
     DEFAULT_VERIFICATION_STATUS,
     COMPLETED_INTERNSHIP_STATUS,
     SUPER_ADMIN_ROLE,
+    ADMIN_PERMISSION_KEYS,
 )
 from app.core.security import hash_password
 from app.models.admin_audit_log import AdminAuditLog
@@ -246,6 +247,14 @@ class SuperAdminService:
     ) -> User:
         if data.role not in ADMIN_ROLES or data.role == SUPER_ADMIN_ROLE:
             raise HTTPException(status_code=400, detail="Only college_admin, department_admin, and admin users can be created")
+        unknown_permissions = sorted(set(data.permissions) - ADMIN_PERMISSION_KEYS)
+        if unknown_permissions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown permissions: {', '.join(unknown_permissions)}",
+            )
+        if data.role == DEPARTMENT_ADMIN_ROLE and not data.department_id:
+            raise HTTPException(status_code=400, detail="Department is required for a department admin")
         if actor and actor.role == COLLEGE_ADMIN_ROLE:
             if not actor.college_id:
                 raise HTTPException(status_code=403, detail="College admin is not assigned to a college")
@@ -254,8 +263,6 @@ class SuperAdminService:
                     status_code=403,
                     detail="College admins can only create department admins for their college",
                 )
-            if not data.department_id:
-                raise HTTPException(status_code=400, detail="Department is required for a department admin")
             # The authenticated admin's college is authoritative. Do not trust
             # a client-supplied college_id, including a missing value.
             data.college_id = actor.college_id

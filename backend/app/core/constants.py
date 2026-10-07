@@ -127,6 +127,20 @@ PLATFORM_ADMIN_ROLE = "admin"
 SUPER_ADMIN_ROLE = "super_admin"
 DEFAULT_COUNTRY = "India"
 
+# Permissions that can be delegated to a department administrator.  Keep this
+# list as the source of truth for the API and the admin portal.
+ADMIN_PERMISSION_CATALOG = (
+    ("view_department_students", "View students", "View students in the assigned department only."),
+    ("create_student", "Create students", "Add students to the assigned department."),
+    ("edit_student", "Edit students", "Update student details in the assigned department."),
+    ("review_verifications", "Review student verifications", "Review verification requests within the permitted department scope."),
+    ("manage_internships", "Manage internships", "Manage internships belonging to students in the permitted department scope."),
+    ("manage_attendance", "Manage attendance", "View and manage attendance for the permitted department scope."),
+    ("view_department_analytics", "View department analytics", "View dashboard analytics only for the permitted department scope, never another college."),
+    ("view_all_college_departments", "View multiple departments", "Allow access to multiple departments in this college when separately configured."),
+)
+ADMIN_PERMISSION_KEYS = frozenset(key for key, _, _ in ADMIN_PERMISSION_CATALOG)
+
 
 # =============================================================================
 # GENERAL STATUS CONSTANTS

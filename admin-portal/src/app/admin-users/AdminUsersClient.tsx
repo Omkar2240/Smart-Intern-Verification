@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Shield, Search, Plus, Power, Crown, Award,
@@ -18,7 +18,7 @@ import { useApi } from "@/hooks/useApi";
 import { api } from "@/lib/api";
 import { ROLE_LABELS, ROLE_COLORS, CAN_CREATE_ROLES } from "@/constants/roles.constants";
 import type {
-  AdminUserListResponse, AdminUserListItem, College, CreateAdminUserPayload, AdminUserFilterParams,
+  AdminUserListResponse, AdminUserListItem, AdminPermissionOption, College, CreateAdminUserPayload, AdminUserFilterParams,
 } from "@/types/admin";
 import { clsx } from "clsx";
 
@@ -36,7 +36,7 @@ const ROLE_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>>
 
 const EMPTY_FORM: CreateAdminUserPayload = {
   name: "", email: "", password: "", role: "department_admin",
-  college_id: null, department_id: null,
+  college_id: null, department_id: null, permissions: [],
 };
 
 export function AdminUsersClient({ initialData, colleges }: Props) {
@@ -58,6 +58,8 @@ export function AdminUsersClient({ initialData, colleges }: Props) {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [deptOptions, setDeptOptions] = useState<{ id: string; name: string }[]>([]);
+  const [departmentsLoading, setDepartmentsLoading] = useState(false);
+  const [permissionOptions, setPermissionOptions] = useState<AdminPermissionOption[]>([]);
   const requestedRole = roleFilter === "all" ? undefined : roleFilter;
   const adminListRole = isPlatformAdmin ? requestedRole : "department_admin";
 
@@ -83,11 +85,23 @@ export function AdminUsersClient({ initialData, colleges }: Props) {
   const handleCollegeChange = useCallback(async (collegeId: string) => {
     setForm((p) => ({ ...p, college_id: collegeId, department_id: null }));
     if (!collegeId) { setDeptOptions([]); return; }
+    setDepartmentsLoading(true);
     try {
       const depts = await api.getAdminDepartments({ college_id: collegeId });
       setDeptOptions(depts.map((d) => ({ id: d.id, name: d.name })));
-    } catch { setDeptOptions([]); }
+    } catch (err) {
+      setDeptOptions([]);
+      setFormError(err instanceof Error ? err.message : "Failed to load departments.");
+    } finally {
+      setDepartmentsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    if (showModal && !isPlatformAdmin && user?.college_id) {
+      void handleCollegeChange(user.college_id);
+    }
+  }, [showModal, isPlatformAdmin, user?.college_id, handleCollegeChange]);
 
   // ── Create admin ──────────────────────────────────────────────────────────
   const openCreate = () => {
@@ -96,12 +110,16 @@ export function AdminUsersClient({ initialData, colleges }: Props) {
     setFormError(null);
     setShowPassword(false);
     setShowModal(true);
-    if (defaultCollegeId) handleCollegeChange(defaultCollegeId);
+    api.getAdminPermissions().then(setPermissionOptions).catch(() => setPermissionOptions([]));
   };
 
   const handleSave = async () => {
     if (!form.name || !form.email || !form.password) {
       setFormError("Name, email and password are required.");
+      return;
+    }
+    if (form.role === "department_admin" && !form.department_id) {
+      setFormError("Department is required for a department admin.");
       return;
     }
     setSaving(true);
@@ -357,8 +375,9 @@ export function AdminUsersClient({ initialData, colleges }: Props) {
                   </div>
                 </div>
 
-                {/* College selector */}
-                {isPlatformAdmin ? (
+                {/* College is intentionally hidden for college admins. The backend
+                    assigns the authenticated admin's college authoritatively. */}
+                {isPlatformAdmin && (
                   <div>
                     <label className="font-mono text-[10px] font-bold text-slate-700 uppercase tracking-wider block mb-1.5">College</label>
                     <select
@@ -370,29 +389,64 @@ export function AdminUsersClient({ initialData, colleges }: Props) {
                       {colleges.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </div>
-                ) : (
-                  <div>
-                    <label className="font-mono text-[10px] font-bold text-slate-700 uppercase tracking-wider block mb-1.5">College</label>
-                    <p className="w-full bg-slate-100 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs text-slate-600">
-                      Assigned to your college
-                    </p>
-                  </div>
                 )}
 
                 {/* Department selector (for dept admin role) */}
-                {form.role === "department_admin" && deptOptions.length > 0 && (
+                {form.role === "department_admin" && (
                   <div>
-                    <label className="font-mono text-[10px] font-bold text-slate-700 uppercase tracking-wider block mb-1.5">Department</label>
+                    <label className="font-mono text-[10px] font-bold text-slate-700 uppercase tracking-wider block mb-1.5">Department *</label>
                     <select
                       value={form.department_id ?? ""}
                       onChange={(e) => setForm((p) => ({ ...p, department_id: e.target.value }))}
+                      disabled={departmentsLoading}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs focus:outline-none focus:border-sky-500 cursor-pointer"
                     >
                       <option value="">Select department...</option>
                       {deptOptions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
                     </select>
+                    {departmentsLoading && (
+                      <p className="mt-1 text-[10px] text-slate-500">Loading departments...</p>
+                    )}
+                    {!departmentsLoading && deptOptions.length === 0 && (
+                      <p className="mt-1 text-[10px] text-rose-600">Select a college with departments before creating this admin.</p>
+                    )}
                   </div>
                 )}
+
+                {/* Permission selector intentionally hidden for now. Keep this block
+                    commented so it can be enabled when permission assignment is approved. */}
+                {/*
+                {form.role === "department_admin" && (
+                  <fieldset className="space-y-2">
+                    <legend className="font-mono text-[10px] font-bold text-slate-700 uppercase tracking-wider">Permissions</legend>
+                    <p className="text-[10px] text-slate-500">Choose the actions this department admin can perform.</p>
+                    <div className="max-h-36 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-2 space-y-1">
+                      {permissionOptions.map((permission) => (
+                        <label key={permission.key} className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-xs text-slate-700 hover:bg-white">
+                          <input
+                            type="checkbox"
+                            checked={form.permissions?.includes(permission.key) ?? false}
+                            onChange={(e) => setForm((p) => ({
+                              ...p,
+                              permissions: e.target.checked
+                                ? [...new Set([...(p.permissions ?? []), permission.key])]
+                                : (p.permissions ?? []).filter((key) => key !== permission.key),
+                            }))}
+                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span>
+                            <span className="block">{permission.label}</span>
+                            <span className="block text-[10px] text-slate-500">{permission.description}</span>
+                          </span>
+                        </label>
+                      ))}
+                      {permissionOptions.length === 0 && (
+                        <p className="px-2 py-1 text-[10px] text-slate-500">No permissions available.</p>
+                      )}
+                    </div>
+                  </fieldset>
+                )}
+                */}
               </div>
 
               <div className="p-5 pt-0 flex gap-2.5">

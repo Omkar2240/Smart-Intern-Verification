@@ -218,6 +218,12 @@ class AdminUserCreate(BaseModel):
     permissions: list[str] = Field(default_factory=list)
 
 
+class AdminPermissionOption(BaseModel):
+    key: str
+    label: str
+    description: str
+
+
 class AdminUserResponse(BaseModel):
     id: UUID
     name: str

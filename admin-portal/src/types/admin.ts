@@ -230,6 +230,13 @@ export interface CreateAdminUserPayload {
   role: "college_admin" | "department_admin" | "admin";
   college_id?: string | null;
   department_id?: string | null;
+  permissions?: string[];
+}
+
+export interface AdminPermissionOption {
+  key: string;
+  label: string;
+  description: string;
 }
 
 // ─── Student ────────────────────────────────────────────────────────────────────

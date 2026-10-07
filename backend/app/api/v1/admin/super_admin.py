@@ -24,7 +24,9 @@ from app.schemas.admin import (
     AdminDepartmentUpdate, AdminStatusUpdate, AdminStudentCreate, AdminStudentResponse,
     AdminStudentUpdate,
     AdminSystemConfigResponse, AdminSystemConfigUpdate, AdminUserCreate, AdminUserResponse,
+    AdminPermissionOption,
 )
+from app.core.constants import ADMIN_PERMISSION_CATALOG
 from app.services.super_admin_service import SuperAdminService
 
 router = APIRouter(prefix="/admin", tags=["Super Admin"])
@@ -78,6 +80,16 @@ async def list_admins(
 @router.post("/admins", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
 async def create_admin(data: AdminUserCreate, db: Annotated[AsyncSession, Depends(get_db)], current_admin: Annotated[User, Depends(require_college_admin)]):
     return await SuperAdminService.create_admin(db, data, current_admin)
+
+
+@router.get("/permissions", response_model=list[AdminPermissionOption])
+async def list_admin_permissions(
+    _: Annotated[User, Depends(require_college_admin)],
+):
+    return [
+        {"key": key, "label": label, "description": description}
+        for key, label, description in ADMIN_PERMISSION_CATALOG
+    ]
 
 
 @router.patch("/admins/{admin_id}/status", response_model=AdminUserResponse)

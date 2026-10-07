@@ -36,6 +36,7 @@ import type {
   SystemConfig,
   CreateStudentPayload,
   UpdateStudentPayload,
+  AdminPermissionOption,
 } from "@/types/admin";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -359,6 +360,10 @@ class ApiClient {
       method: "POST",
       body: JSON.stringify(data),
     });
+  }
+
+  async getAdminPermissions(): Promise<AdminPermissionOption[]> {
+    return this.request<AdminPermissionOption[]>("/admin/permissions");
   }
 
   async toggleAdminStatus(adminId: string, isActive: boolean): Promise<ActionResponse> {
