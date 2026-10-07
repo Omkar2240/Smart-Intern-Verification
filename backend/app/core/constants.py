@@ -133,6 +133,19 @@ SUCCESS_STATUS = "success"
 FAILED_STATUS = "failed"
 DELETED_STATUS = "deleted"
 
+# Attendance statuses and supported analytics periods
+ATTENDANCE_STATUSES = (
+    "present",
+    "absent",
+    "late",
+)
+ATTENDANCE_PERIODS = (
+    "week",
+    "month",
+    "quarter",
+    "year",
+)
+
 
 # =============================================================================
 # HELPER FUNCTIONS

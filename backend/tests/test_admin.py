@@ -417,3 +417,20 @@ async def test_admin_internship_management_and_force_verify(client: AsyncClient,
     assert resp_me.status_code == 200
     assert resp_me.json()["is_verified"] is True
 
+
+@pytest.mark.asyncio
+async def test_admin_attendance_endpoints(client: AsyncClient, db_session: AsyncSession):
+    _, admin_token = await create_admin_user(db_session)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    records = await client.get("/api/v1/admin/attendance", headers=headers)
+    assert records.status_code == 200
+    assert records.json()["total"] == 0
+    assert records.json()["items"] == []
+
+    analytics = await client.get(
+        "/api/v1/admin/attendance/analytics?period=month",
+        headers=headers,
+    )
+    assert analytics.status_code == 200
+    assert analytics.json()["average_attendance_rate"] == 0

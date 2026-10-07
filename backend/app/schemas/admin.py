@@ -140,3 +140,32 @@ class AdminAnalyticsSummary(BaseModel):
     total_internships: int = 0
     pending_internships: int = 0
     verified_internships: int = 0
+
+
+class AdminAttendanceItem(BaseModel):
+    id: UUID
+    student_id: UUID
+    student_name: str
+    department_id: UUID | None = None
+    department_name: str | None = None
+    date: str
+    check_in: str
+    check_out: str | None = None
+    status: str
+    attendance_rate: float
+
+
+class AdminAttendanceListResponse(BaseModel):
+    total: int
+    items: list[AdminAttendanceItem]
+    page: int = 1
+    page_size: int = 20
+
+
+class AdminAttendanceAnalytics(BaseModel):
+    average_attendance_rate: float
+    present_today: int
+    absent_today: int
+    late_today: int
+    monthly_trend: list[dict]
+    department_breakdown: list[dict]
