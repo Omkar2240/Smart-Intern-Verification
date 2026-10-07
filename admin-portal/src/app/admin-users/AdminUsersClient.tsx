@@ -58,15 +58,17 @@ export function AdminUsersClient({ initialData, colleges }: Props) {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [deptOptions, setDeptOptions] = useState<{ id: string; name: string }[]>([]);
+  const requestedRole = roleFilter === "all" ? undefined : roleFilter;
+  const adminListRole = isPlatformAdmin ? requestedRole : "department_admin";
 
   // ── Fetch list ────────────────────────────────────────────────────────────
   const { data, loading, error, refetch } = useApi(
     () => api.getAdminUsers({
       search: debouncedSearch || undefined,
-      role: (roleFilter === "all" ? undefined : roleFilter) as AdminUserFilterParams["role"],
+      role: adminListRole as AdminUserFilterParams["role"],
       page, page_size: 20,
     }),
-    [debouncedSearch, roleFilter, page],
+    [debouncedSearch, adminListRole, page],
   );
 
   const items = data?.items ?? initialData?.items ?? [];
@@ -356,7 +358,7 @@ export function AdminUsersClient({ initialData, colleges }: Props) {
                 </div>
 
                 {/* College selector */}
-                {isPlatformAdmin && (
+                {isPlatformAdmin ? (
                   <div>
                     <label className="font-mono text-[10px] font-bold text-slate-700 uppercase tracking-wider block mb-1.5">College</label>
                     <select
@@ -367,6 +369,13 @@ export function AdminUsersClient({ initialData, colleges }: Props) {
                       <option value="">Select college...</option>
                       {colleges.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="font-mono text-[10px] font-bold text-slate-700 uppercase tracking-wider block mb-1.5">College</label>
+                    <p className="w-full bg-slate-100 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs text-slate-600">
+                      Assigned to your college
+                    </p>
                   </div>
                 )}
 

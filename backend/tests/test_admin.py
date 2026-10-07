@@ -17,6 +17,8 @@ from app.models.admin_audit_log import AdminAuditLog
 from app.models.college_student_roster import CollegeStudentRoster
 from app.core.constants import INTERNSHIP_TYPES
 from app.core.security import create_access_token
+from app.schemas.admin import AdminUserCreate
+from app.services.super_admin_service import SuperAdminService
 from tests.conftest import register_user
 
 
@@ -376,6 +378,77 @@ async def test_admin_analytics_summary_counts_students_within_role_scope(
     assert await total_users(super_token) == 4
     assert await total_users(college_token) == 3
     assert await total_users(department_token) == 2
+
+
+@pytest.mark.asyncio
+async def test_college_admin_scope_is_authoritative(db_session: AsyncSession):
+    """College admins only see and create department admins in their college."""
+    college_one = College(
+        name="GHRCE MN", city="Nagpur", state="Maharashtra", country="India", code="GH"
+    )
+    college_two = College(
+        name="Other College", city="Pune", state="Maharashtra", country="India", code="OC"
+    )
+    db_session.add_all([college_one, college_two])
+    await db_session.flush()
+
+    department_one = Department(
+        college_id=college_one.id, name="Computer Engineering", code="CSE"
+    )
+    department_two = Department(
+        college_id=college_two.id, name="Computer Engineering", code="CSE"
+    )
+    db_session.add_all([department_one, department_two])
+    await db_session.flush()
+
+    college_admin, _ = await create_admin_user(db_session, role="college_admin")
+    college_admin.college_id = college_one.id
+    db_session.add_all(
+        [
+            User(
+                email="ghrce-dept@example.com",
+                name="GHRCE Department Admin",
+                registration_number="ADMIN-GH",
+                mobile_number="9000000001",
+                password_hash="hashed_pw",
+                role="department_admin",
+                college_id=college_one.id,
+                department_id=department_one.id,
+            ),
+            User(
+                email="other-dept@example.com",
+                name="Other Department Admin",
+                registration_number="ADMIN-OC",
+                mobile_number="9000000002",
+                password_hash="hashed_pw",
+                role="department_admin",
+                college_id=college_two.id,
+                department_id=department_two.id,
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    result = await SuperAdminService.list_admins(
+        db_session, None, None, None, 1, 20, college_admin
+    )
+    assert result["total"] == 1
+    assert result["items"][0].email == "ghrce-dept@example.com"
+
+    created = await SuperAdminService.create_admin(
+        db_session,
+        AdminUserCreate(
+            name="New GHRCE Admin",
+            email="new-ghrce@example.com",
+            password="password123",
+            role="department_admin",
+            # Deliberately omit college_id: the service must derive it from the actor.
+            department_id=department_one.id,
+        ),
+        college_admin,
+    )
+    assert created.college_id == college_one.id
+    assert created.department_id == department_one.id
 
 
 @pytest.mark.asyncio

@@ -190,6 +190,9 @@ class SuperAdminService:
             if college_id and college_id != actor.college_id:
                 raise HTTPException(status_code=403, detail="You can only access your college")
             college_id = actor.college_id
+            # College admins manage department admins only. Enforce this in the
+            # service so callers cannot widen the list by omitting the role filter.
+            role = "department_admin"
         if role:
             if role not in ADMIN_ROLES:
                 raise HTTPException(status_code=400, detail="Invalid administrator role")
@@ -218,13 +221,18 @@ class SuperAdminService:
         if data.role not in ADMIN_ROLES or data.role == "super_admin":
             raise HTTPException(status_code=400, detail="Only college_admin, department_admin, and admin users can be created")
         if actor and actor.role == "college_admin":
-            if data.role != "department_admin" or data.college_id != actor.college_id:
+            if not actor.college_id:
+                raise HTTPException(status_code=403, detail="College admin is not assigned to a college")
+            if data.role != "department_admin":
                 raise HTTPException(
                     status_code=403,
                     detail="College admins can only create department admins for their college",
                 )
             if not data.department_id:
                 raise HTTPException(status_code=400, detail="Department is required for a department admin")
+            # The authenticated admin's college is authoritative. Do not trust
+            # a client-supplied college_id, including a missing value.
+            data.college_id = actor.college_id
         if data.department_id:
             department = await db.get(Department, data.department_id)
             if not department:
