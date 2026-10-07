@@ -11,7 +11,12 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db, require_college_admin, require_super_admin
+from app.api.deps import (
+    get_db,
+    require_college_admin,
+    require_department_admin,
+    require_super_admin,
+)
 from app.models.user import User
 from app.schemas.college import CollegeListResponse
 from app.schemas.admin import (
@@ -42,7 +47,7 @@ async def list_colleges(
 @router.get("/departments")
 async def list_departments(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_admin: Annotated[User, Depends(require_college_admin)],
+    current_admin: Annotated[User, Depends(require_department_admin)],
     college_id: UUID | None = None, search: str | None = None,
     page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
 ):
@@ -55,7 +60,7 @@ async def create_department(data: AdminDepartmentCreate, db: Annotated[AsyncSess
 
 
 @router.put("/departments/{department_id}", response_model=AdminDepartmentResponse)
-async def update_department(department_id: UUID, data: AdminDepartmentUpdate, db: Annotated[AsyncSession, Depends(get_db)], current_admin: Annotated[User, Depends(require_college_admin)]):
+async def update_department(department_id: UUID, data: AdminDepartmentUpdate, db: Annotated[AsyncSession, Depends(get_db)], current_admin: Annotated[User, Depends(require_department_admin)]):
     return await SuperAdminService.update_department(db, department_id, data, current_admin)
 
 
@@ -82,7 +87,7 @@ async def update_admin_status(admin_id: UUID, data: AdminStatusUpdate, db: Annot
 @router.get("/students")
 async def list_students(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_admin: Annotated[User, Depends(require_college_admin)],
+    current_admin: Annotated[User, Depends(require_department_admin)],
     college_id: UUID | None = None, department_id: UUID | None = None,
     verification_status: str | None = None, search: str | None = None,
     page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),

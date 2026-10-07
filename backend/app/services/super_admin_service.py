@@ -79,6 +79,13 @@ class SuperAdminService:
             if college_id and college_id != actor.college_id:
                 raise HTTPException(status_code=403, detail="You can only access your college")
             college_id = actor.college_id
+            if actor.role == "department_admin":
+                if not actor.department_id:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Department admin is not assigned to a department",
+                    )
+                conditions.append(Department.id == actor.department_id)
         if college_id:
             conditions.append(Department.college_id == college_id)
         if search and search.strip():
@@ -160,6 +167,14 @@ class SuperAdminService:
             raise _not_found("Department not found")
         if actor and actor.role == "college_admin" and actor.college_id != department.college_id:
             raise HTTPException(status_code=403, detail="You can only manage your college")
+        if actor and actor.role == "department_admin":
+            if not actor.department_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Department admin is not assigned to a department",
+                )
+            if actor.department_id != department.id:
+                raise HTTPException(status_code=403, detail="You can only manage your department")
         values = data.model_dump(exclude_unset=True)
         if "code" in values:
             values["code"] = values["code"].strip().upper()
@@ -285,6 +300,18 @@ class SuperAdminService:
             if college_id and college_id != actor.college_id:
                 raise HTTPException(status_code=403, detail="You can only access your college")
             college_id = actor.college_id
+        elif actor and actor.role == "department_admin":
+            if not actor.college_id or not actor.department_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Department admin is not assigned to a college and department",
+                )
+            if college_id and college_id != actor.college_id:
+                raise HTTPException(status_code=403, detail="You can only access your college")
+            if department_id and department_id != actor.department_id:
+                raise HTTPException(status_code=403, detail="You can only access your department")
+            college_id = actor.college_id
+            department_id = actor.department_id
         if college_id:
             conditions.append(
                 or_(
@@ -301,7 +328,8 @@ class SuperAdminService:
             conditions.append(or_(User.name.ilike(term), User.email.ilike(term), User.registration_number.ilike(term)))
         base = select(User).outerjoin(IdentityVerification).options(
             selectinload(User.college), selectinload(User.department),
-            selectinload(User.identity_verification), selectinload(User.internships)
+            selectinload(User.identity_verification).selectinload(IdentityVerification.college),
+            selectinload(User.internships)
         ).where(and_(*conditions))
         total = (await db.execute(select(func.count(User.id)).outerjoin(IdentityVerification).where(and_(*conditions)))).scalar_one()
         rows = (await db.execute(base.order_by(User.created_at.desc()).offset((page - 1) * page_size).limit(page_size))).scalars().unique().all()
