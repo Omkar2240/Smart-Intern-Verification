@@ -11,12 +11,12 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db, require_super_admin
+from app.api.deps import get_db, require_college_admin, require_super_admin
 from app.models.user import User
 from app.schemas.college import CollegeListResponse
 from app.schemas.admin import (
     AdminAuditLogResponse, AdminDepartmentCreate, AdminDepartmentResponse,
-    AdminDepartmentUpdate, AdminStatusUpdate, AdminStudentResponse,
+    AdminDepartmentUpdate, AdminStatusUpdate, AdminStudentCreate, AdminStudentResponse,
     AdminSystemConfigResponse, AdminSystemConfigUpdate, AdminUserCreate, AdminUserResponse,
 )
 from app.services.super_admin_service import SuperAdminService
@@ -42,35 +42,36 @@ async def list_colleges(
 @router.get("/departments")
 async def list_departments(
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[User, Depends(require_super_admin)],
+    current_admin: Annotated[User, Depends(require_college_admin)],
     college_id: UUID | None = None, search: str | None = None,
     page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
 ):
-    return await SuperAdminService.list_departments(db, college_id, search, page, page_size)
+    return await SuperAdminService.list_departments(db, college_id, search, page, page_size, current_admin)
 
 
 @router.post("/departments", response_model=AdminDepartmentResponse, status_code=status.HTTP_201_CREATED)
-async def create_department(data: AdminDepartmentCreate, db: Annotated[AsyncSession, Depends(get_db)], _: Annotated[User, Depends(require_super_admin)]):
-    return await SuperAdminService.create_department(db, data)
+async def create_department(data: AdminDepartmentCreate, db: Annotated[AsyncSession, Depends(get_db)], current_admin: Annotated[User, Depends(require_college_admin)]):
+    return await SuperAdminService.create_department(db, data, current_admin)
 
 
 @router.put("/departments/{department_id}", response_model=AdminDepartmentResponse)
-async def update_department(department_id: UUID, data: AdminDepartmentUpdate, db: Annotated[AsyncSession, Depends(get_db)], _: Annotated[User, Depends(require_super_admin)]):
-    return await SuperAdminService.update_department(db, department_id, data)
+async def update_department(department_id: UUID, data: AdminDepartmentUpdate, db: Annotated[AsyncSession, Depends(get_db)], current_admin: Annotated[User, Depends(require_college_admin)]):
+    return await SuperAdminService.update_department(db, department_id, data, current_admin)
 
 
 @router.get("/admins")
 async def list_admins(
-    db: Annotated[AsyncSession, Depends(get_db)], _: Annotated[User, Depends(require_super_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_admin: Annotated[User, Depends(require_college_admin)],
     role: str | None = None, college_id: UUID | None = None, search: str | None = None,
     page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
 ):
-    return await SuperAdminService.list_admins(db, role, college_id, search, page, page_size)
+    return await SuperAdminService.list_admins(db, role, college_id, search, page, page_size, current_admin)
 
 
 @router.post("/admins", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
-async def create_admin(data: AdminUserCreate, db: Annotated[AsyncSession, Depends(get_db)], _: Annotated[User, Depends(require_super_admin)]):
-    return await SuperAdminService.create_admin(db, data)
+async def create_admin(data: AdminUserCreate, db: Annotated[AsyncSession, Depends(get_db)], current_admin: Annotated[User, Depends(require_college_admin)]):
+    return await SuperAdminService.create_admin(db, data, current_admin)
 
 
 @router.patch("/admins/{admin_id}/status", response_model=AdminUserResponse)
@@ -80,12 +81,22 @@ async def update_admin_status(admin_id: UUID, data: AdminStatusUpdate, db: Annot
 
 @router.get("/students")
 async def list_students(
-    db: Annotated[AsyncSession, Depends(get_db)], _: Annotated[User, Depends(require_super_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_admin: Annotated[User, Depends(require_college_admin)],
     college_id: UUID | None = None, department_id: UUID | None = None,
     verification_status: str | None = None, search: str | None = None,
     page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
 ):
-    return await SuperAdminService.list_students(db, college_id, department_id, verification_status, search, page, page_size)
+    return await SuperAdminService.list_students(db, college_id, department_id, verification_status, search, page, page_size, current_admin)
+
+
+@router.post("/students", response_model=AdminStudentResponse, status_code=status.HTTP_201_CREATED)
+async def create_student(
+    data: AdminStudentCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_admin: Annotated[User, Depends(require_college_admin)],
+):
+    return await SuperAdminService.create_student(db, data, current_admin)
 
 
 @router.get("/audit-logs")

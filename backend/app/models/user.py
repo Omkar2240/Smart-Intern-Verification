@@ -5,7 +5,7 @@ User model — core identity table.
 import uuid
 from typing import Optional
 
-from sqlalchemy import Boolean, ForeignKey, String, Uuid
+from sqlalchemy import JSON, Boolean, ForeignKey, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
@@ -28,6 +28,9 @@ class User(Base, UUIDMixin, TimestampMixin):
     )
     department_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         Uuid(), ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    permissions: Mapped[list[str]] = mapped_column(
+        JSON, default=list, nullable=False
     )
 
     # Relationships

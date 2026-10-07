@@ -43,7 +43,7 @@ Login to the admin portal.
 
 ## Department Management
 
-### GET /api/v1/departments
+### GET /api/v1/admin/departments
 List all departments in the college.
 
 **Access:** `college_admin`
@@ -142,6 +142,7 @@ List all department admins in the college.
       "college_name": "IIT Bombay",
       "department_id": "uuid",
       "department_name": "Computer Science & Engineering",
+      "permissions": ["manage_students", "review_verifications"],
       "is_active": true,
       "last_login": "2024-01-15T10:30:00Z",
       "created_at": "2024-01-01T00:00:00Z"
@@ -162,7 +163,8 @@ Create a new department admin.
   "email": "amit.kumar@iitb.edu",
   "role": "department_admin",
   "college_id": "uuid",
-  "department_id": "uuid"
+  "department_id": "uuid",
+  "permissions": ["manage_students", "review_verifications"]
 }
 ```
 
@@ -175,6 +177,7 @@ Create a new department admin.
   "role": "department_admin",
   "college_id": "uuid",
   "department_id": "uuid",
+  "permissions": ["manage_students", "review_verifications"],
   "is_active": true,
   "created_at": "2024-01-01T00:00:00Z"
 }

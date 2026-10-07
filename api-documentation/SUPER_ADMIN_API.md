@@ -10,8 +10,9 @@ The Super Admin has full platform-wide access to manage colleges, departments, a
 
 The existing review, internship, college, roster, attendance, and analytics routes
 are kept in the existing `/api/v1/admin` router. The following platform-management
-routes are implemented in the modular super-admin router and require
-`super_admin` access:
+routes are implemented in the modular admin router. Department and student
+management can be used by a `college_admin` for that admin's college; platform
+administration routes remain restricted to `super_admin`/`admin`:
 
 | Method | Endpoint | Purpose |
 |---|---|---|
@@ -21,7 +22,7 @@ routes are implemented in the modular super-admin router and require
 | PUT | `/api/v1/admin/departments/{department_id}` | Update a department |
 | GET/POST | `/api/v1/admin/admins` | List and create scoped administrators |
 | PATCH | `/api/v1/admin/admins/{admin_id}/status` | Activate/deactivate an administrator |
-| GET | `/api/v1/admin/students` | Paginated, filterable student directory |
+| GET/POST | `/api/v1/admin/students` | List or create students (college-scoped for college admins) |
 | GET | `/api/v1/admin/audit-logs` | Paginated audit history |
 | GET/PUT | `/api/v1/admin/system-config` | List and update platform configuration |
 

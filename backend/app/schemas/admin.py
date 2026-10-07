@@ -4,7 +4,7 @@ Admin schemas for verification review queue, college administration, whitelist r
 
 from datetime import datetime
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 from app.schemas.internship import InternshipResponse
@@ -196,6 +196,7 @@ class AdminDepartmentResponse(BaseModel):
     hod_email: str | None
     is_active: bool
     student_count: int = 0
+    active_internships: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -214,6 +215,7 @@ class AdminUserCreate(BaseModel):
     college_id: UUID | None = None
     department_id: UUID | None = None
     password: str = Field(..., min_length=8, max_length=128)
+    permissions: list[str] = Field(default_factory=list)
 
 
 class AdminUserResponse(BaseModel):
@@ -223,6 +225,7 @@ class AdminUserResponse(BaseModel):
     role: str
     college_id: UUID | None
     department_id: UUID | None
+    permissions: list[str] = Field(default_factory=list)
     is_active: bool
     created_at: datetime
 
@@ -247,6 +250,16 @@ class AdminStudentResponse(BaseModel):
     internship_status: str
     is_verified: bool
     created_at: datetime
+
+
+class AdminStudentCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=255)
+    email: EmailStr
+    registration_number: str = Field(..., min_length=3, max_length=50)
+    mobile_number: str = Field(..., min_length=7, max_length=20)
+    password: str = Field(..., min_length=8, max_length=128)
+    college_id: UUID
+    department_id: UUID | None = None
 
 
 class AdminAuditLogResponse(BaseModel):

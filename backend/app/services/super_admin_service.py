@@ -22,6 +22,7 @@ from app.schemas.admin import (
     AdminDepartmentCreate,
     AdminDepartmentResponse,
     AdminDepartmentUpdate,
+    AdminStudentCreate,
     AdminStudentResponse,
     AdminSystemConfigResponse,
     AdminUserCreate,
@@ -68,9 +69,16 @@ class SuperAdminService:
 
     @staticmethod
     async def list_departments(
-        db: AsyncSession, college_id: UUID | None, search: str | None, page: int, page_size: int
+        db: AsyncSession, college_id: UUID | None, search: str | None, page: int,
+        page_size: int, actor: User | None = None,
     ) -> dict:
         conditions = []
+        if actor and actor.role == "college_admin":
+            if not actor.college_id:
+                raise HTTPException(status_code=403, detail="College admin is not assigned to a college")
+            if college_id and college_id != actor.college_id:
+                raise HTTPException(status_code=403, detail="You can only access your college")
+            college_id = actor.college_id
         if college_id:
             conditions.append(Department.college_id == college_id)
         if search and search.strip():
@@ -99,15 +107,27 @@ class SuperAdminService:
                     )
                 )
             ).scalar_one()
+            # Count active internships where the department string matches this department's code
+            active_internships = (
+                await db.execute(
+                    select(func.count(Internship.id)).where(
+                        Internship.department == row.code, Internship.is_active == True
+                    )
+                )
+            ).scalar_one()
             items.append(
                 AdminDepartmentResponse.model_validate(
-                    {**row.__dict__, "student_count": student_count}
+                    {**row.__dict__, "student_count": student_count, "active_internships": active_internships}
                 )
             )
         return {"total": total, "page": page, "page_size": page_size, "items": items}
 
     @staticmethod
-    async def create_department(db: AsyncSession, data: AdminDepartmentCreate) -> Department:
+    async def create_department(
+        db: AsyncSession, data: AdminDepartmentCreate, actor: User | None = None
+    ) -> Department:
+        if actor and actor.role == "college_admin" and actor.college_id != data.college_id:
+            raise HTTPException(status_code=403, detail="You can only manage your college")
         college = await db.get(College, data.college_id)
         if not college or not college.is_active:
             raise _not_found("College not found")
@@ -132,11 +152,14 @@ class SuperAdminService:
 
     @staticmethod
     async def update_department(
-        db: AsyncSession, department_id: UUID, data: AdminDepartmentUpdate
+        db: AsyncSession, department_id: UUID, data: AdminDepartmentUpdate,
+        actor: User | None = None,
     ) -> Department:
         department = await db.get(Department, department_id)
         if not department:
             raise _not_found("Department not found")
+        if actor and actor.role == "college_admin" and actor.college_id != department.college_id:
+            raise HTTPException(status_code=403, detail="You can only manage your college")
         values = data.model_dump(exclude_unset=True)
         if "code" in values:
             values["code"] = values["code"].strip().upper()
@@ -158,9 +181,15 @@ class SuperAdminService:
     @staticmethod
     async def list_admins(
         db: AsyncSession, role: str | None, college_id: UUID | None, search: str | None,
-        page: int, page_size: int
+        page: int, page_size: int, actor: User | None = None,
     ) -> dict:
         conditions = [User.role.in_(ADMIN_ROLES)]
+        if actor and actor.role == "college_admin":
+            if not actor.college_id:
+                raise HTTPException(status_code=403, detail="College admin is not assigned to a college")
+            if college_id and college_id != actor.college_id:
+                raise HTTPException(status_code=403, detail="You can only access your college")
+            college_id = actor.college_id
         if role:
             if role not in ADMIN_ROLES:
                 raise HTTPException(status_code=400, detail="Invalid administrator role")
@@ -183,13 +212,31 @@ class SuperAdminService:
         }
 
     @staticmethod
-    async def create_admin(db: AsyncSession, data: AdminUserCreate) -> User:
+    async def create_admin(
+        db: AsyncSession, data: AdminUserCreate, actor: User | None = None
+    ) -> User:
         if data.role not in ADMIN_ROLES or data.role == "super_admin":
             raise HTTPException(status_code=400, detail="Only college_admin, department_admin, and admin users can be created")
+        if actor and actor.role == "college_admin":
+            if data.role != "department_admin" or data.college_id != actor.college_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail="College admins can only create department admins for their college",
+                )
+            if not data.department_id:
+                raise HTTPException(status_code=400, detail="Department is required for a department admin")
         if data.department_id:
             department = await db.get(Department, data.department_id)
-            if not department or (data.college_id and department.college_id != data.college_id):
+            if not department:
+                raise HTTPException(status_code=400, detail="Department not found")
+            if data.college_id and department.college_id != data.college_id:
                 raise HTTPException(status_code=400, detail="Department does not belong to the selected college")
+            if not data.college_id:
+                data.college_id = department.college_id
+        if actor and actor.role == "college_admin" and data.department_id:
+            department = await db.get(Department, data.department_id)
+            if not department or department.college_id != actor.college_id:
+                raise HTTPException(status_code=403, detail="Department does not belong to your college")
         existing = await db.execute(select(User).where(User.email == data.email.lower().strip()))
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=409, detail="Email is already registered")
@@ -199,6 +246,7 @@ class SuperAdminService:
             mobile_number=f"admin-{uuid.uuid4().hex[:12]}",
             password_hash=hash_password(data.password), role=data.role,
             college_id=data.college_id, department_id=data.department_id,
+            permissions=data.permissions,
             is_active=True, is_verified=True,
         )
         db.add(user)
@@ -219,9 +267,16 @@ class SuperAdminService:
     @staticmethod
     async def list_students(
         db: AsyncSession, college_id: UUID | None, department_id: UUID | None,
-        verification_status: str | None, search: str | None, page: int, page_size: int
+        verification_status: str | None, search: str | None, page: int, page_size: int,
+        actor: User | None = None,
     ) -> dict:
         conditions = [User.role == "student"]
+        if actor and actor.role == "college_admin":
+            if not actor.college_id:
+                raise HTTPException(status_code=403, detail="College admin is not assigned to a college")
+            if college_id and college_id != actor.college_id:
+                raise HTTPException(status_code=403, detail="You can only access your college")
+            college_id = actor.college_id
         if college_id:
             conditions.append(User.college_id == college_id)
         if department_id:
@@ -249,6 +304,56 @@ class SuperAdminService:
                 internship_status=internship_status, is_verified=row.is_verified, created_at=row.created_at,
             ))
         return {"total": total, "page": page, "page_size": page_size, "items": items}
+
+    @staticmethod
+    async def create_student(
+        db: AsyncSession, data: AdminStudentCreate, actor: User
+    ) -> AdminStudentResponse:
+        if actor.role == "college_admin" and actor.college_id != data.college_id:
+            raise HTTPException(status_code=403, detail="You can only create students for your college")
+        college = await db.get(College, data.college_id)
+        if not college or not college.is_active:
+            raise _not_found("College not found")
+        department = None
+        if data.department_id:
+            department = await db.get(Department, data.department_id)
+            if not department or department.college_id != data.college_id:
+                raise HTTPException(status_code=400, detail="Department does not belong to the selected college")
+        duplicate = await db.execute(
+            select(User).where(
+                or_(
+                    User.email == data.email.lower().strip(),
+                    User.registration_number == data.registration_number.strip(),
+                    User.mobile_number == data.mobile_number.strip(),
+                )
+            )
+        )
+        if duplicate.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail="Email, registration number, or mobile number is already registered")
+        student = User(
+            name=data.name.strip(),
+            email=data.email.lower().strip(),
+            registration_number=data.registration_number.strip(),
+            mobile_number=data.mobile_number.strip(),
+            password_hash=hash_password(data.password),
+            role="student",
+            college_id=data.college_id,
+            department_id=data.department_id,
+            is_active=True,
+            is_verified=False,
+        )
+        db.add(student)
+        await db.commit()
+        await db.refresh(student)
+        return AdminStudentResponse(
+            id=student.id, name=student.name, email=student.email,
+            registration_number=student.registration_number,
+            mobile_number=student.mobile_number, college_id=student.college_id,
+            college_name=college.name, department_id=student.department_id,
+            department_name=department.name if department else None,
+            verification_status="not_started", internship_status="not_started",
+            is_verified=student.is_verified, created_at=student.created_at,
+        )
 
     @staticmethod
     async def list_audit_logs(db: AsyncSession, action: str | None, page: int, page_size: int) -> dict:
