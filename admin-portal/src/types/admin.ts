@@ -4,7 +4,14 @@ export interface AdminUser {
   id: string;
   name: string;
   email: string;
-  role: "super_admin" | "college_admin" | "student";
+  role: "super_admin" | "admin" | "college_admin" | "department_admin" | "student";
+  college_id?: string | null;
+  college_name?: string | null;
+  department_id?: string | null;
+  department_name?: string | null;
+  is_active?: boolean;
+  created_at?: string;
+  last_login?: string | null;
 }
 
 export interface VerificationItem {
