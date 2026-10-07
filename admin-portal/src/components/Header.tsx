@@ -32,6 +32,14 @@ const roleDisplayMap: Record<
     bg: "bg-purple-50",
     border: "border-purple-200",
   },
+  admin: {
+    label: "PLATFORM ADMIN",
+    sublabel: "Platform Wide",
+    icon: Crown,
+    color: "text-indigo-700",
+    bg: "bg-indigo-50",
+    border: "border-indigo-200",
+  },
   college_admin: {
     label: "COLLEGE ADMIN",
     sublabel: "Middle Level",
@@ -51,7 +59,7 @@ const roleDisplayMap: Record<
 };
 
 function LiveClock() {
-  const [time, setTime] = React.useState(null);
+  const [time, setTime] = React.useState<Date | null>(null);
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -153,9 +161,11 @@ export function Header({ title, description, actions }: HeaderProps) {
               "w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs text-white bg-gradient-to-br shadow-sm",
               role === "super_admin"
                 ? "from-purple-500 to-indigo-600"
-                : role === "college_admin"
-                  ? "from-sky-500 to-blue-600"
-                  : "from-emerald-500 to-teal-600",
+                : role === "admin"
+                  ? "from-indigo-500 to-violet-600"
+                  : role === "college_admin"
+                    ? "from-sky-500 to-blue-600"
+                    : "from-emerald-500 to-teal-600",
             )}
           >
             {user?.name?.[0]?.toUpperCase() || "A"}

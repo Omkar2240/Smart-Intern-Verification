@@ -3,37 +3,22 @@
 import React from "react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { motion } from "framer-motion";
 import {
   Building2, Users, ShieldCheck, AlertTriangle, Briefcase,
-  Clock, TrendingUp, ChevronRight, Crown, GraduationCap, Eye
+  Clock, ChevronRight, TrendingUp,
 } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
-import { mockColleges } from "@/data/mock/colleges.mock";
-import { mockAnalytics } from "@/data/mock/analytics.mock";
-import { mockFlaggedCases } from "@/data/mock/auditLogs.mock";
-import { mockMonthlyAttendance } from "@/data/mock/attendance.mock";
+import type { AnalyticsSummary, AttendanceAnalytics } from "@/types/admin";
 
-const COLORS = ["#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
+interface Props {
+  analytics: AnalyticsSummary | null;
+  attendanceAnalytics: AttendanceAnalytics | null;
+}
 
-const collegeStudentData = mockColleges.map((c, i) => ({
-  name: c.code,
-  students: [842, 620, 496, 355, 165][i] || 100,
-}));
-
-const internshipPieData = [
-  { name: "Active", value: 1824, color: "#0ea5e9" },
-  { name: "Completed", value: 412, color: "#10b981" },
-  { name: "Not Started", value: 245, color: "#94a3b8" },
-];
-
-const verificationPieData = [
-  { name: "Verified", value: 2218, color: "#10b981" },
-  { name: "Pending", value: 169, color: "#f59e0b" },
-  { name: "Flagged", value: 94, color: "#ef4444" },
-];
+const CHART_COLORS = ["#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
 
 interface CustomTooltipProps {
   active?: boolean;
@@ -41,36 +26,53 @@ interface CustomTooltipProps {
   label?: string;
 }
 
-const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-lg text-xs">
-        <p className="font-bold text-slate-900 mb-1">{label}</p>
-        {payload.map((p, i) => (
-          <p key={i} style={{ color: p.color }} className="font-mono font-semibold">
-            {p.name}: {p.value}
-          </p>
-        ))}
-      </div>
-    );
-  }
-  return null;
-};
+function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-lg text-xs">
+      <p className="font-bold text-slate-900 mb-1">{label}</p>
+      {payload.map((p, i) => (
+        <p key={i} style={{ color: p.color ?? "#0ea5e9" }} className="font-mono font-semibold">
+          {p.name}: {typeof p.value === "number" ? p.value.toLocaleString() : p.value}
+        </p>
+      ))}
+    </div>
+  );
+}
 
-export function SuperAdminDashboard() {
-  const stats = mockAnalytics.super_admin;
+export function SuperAdminDashboard({ analytics, attendanceAnalytics }: Props) {
+  const stats = analytics;
+
+  // Build pie data from real analytics
+  const verificationPieData = stats
+    ? [
+        { name: "Verified", value: stats.verified_users, color: "#10b981" },
+        { name: "Pending Review", value: stats.pending_reviews, color: "#f59e0b" },
+        { name: "Rejected", value: stats.rejected_verifications, color: "#ef4444" },
+      ]
+    : [];
+
+  const internshipPieData = stats?.total_internships
+    ? [
+        { name: "Verified", value: stats.verified_internships ?? 0, color: "#0ea5e9" },
+        { name: "Pending", value: stats.pending_internships ?? 0, color: "#f59e0b" },
+        { name: "Other", value: (stats.total_internships ?? 0) - (stats.verified_internships ?? 0) - (stats.pending_internships ?? 0), color: "#94a3b8" },
+      ]
+    : [];
+
+  const monthlyTrend = attendanceAnalytics?.monthly_trend ?? [];
 
   return (
     <div className="space-y-6">
       {/* KPI Row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
-          { title: "Total Colleges", value: stats.active_colleges, icon: Building2, color: "indigo" as const, subtitle: "Whitelisted" },
-          { title: "Total Students", value: stats.total_users.toLocaleString(), icon: Users, color: "cyan" as const, subtitle: "All enrolled" },
-          { title: "Active Interns", value: "1,824", icon: Briefcase, color: "emerald" as const, subtitle: "On internship" },
-          { title: "Pending Reviews", value: stats.pending_reviews, icon: Clock, color: "amber" as const, badge: "Queue", subtitle: "Awaiting" },
-          { title: "Flagged Cases", value: stats.rejected_verifications, icon: AlertTriangle, color: "rose" as const, subtitle: "Needs action" },
-          { title: "Verified Profiles", value: stats.verified_users.toLocaleString(), icon: ShieldCheck, color: "emerald" as const, subtitle: "3-tier cleared" },
+          { title: "Colleges", value: stats?.active_colleges ?? "—", icon: Building2, color: "indigo" as const, subtitle: "Whitelisted" },
+          { title: "Total Students", value: stats?.total_users?.toLocaleString() ?? "—", icon: Users, color: "cyan" as const, subtitle: "All enrolled" },
+          { title: "Active Interns", value: stats?.total_internships?.toLocaleString() ?? "—", icon: Briefcase, color: "emerald" as const, subtitle: "On internship" },
+          { title: "Pending Reviews", value: stats?.pending_reviews ?? "—", icon: Clock, color: "amber" as const, badge: (stats?.pending_reviews ?? 0) > 0 ? "Queue" : undefined, subtitle: "Awaiting" },
+          { title: "Flagged Cases", value: stats?.rejected_verifications ?? "—", icon: AlertTriangle, color: "rose" as const, subtitle: "Needs action" },
+          { title: "Verified", value: stats?.verified_users?.toLocaleString() ?? "—", icon: ShieldCheck, color: "emerald" as const, subtitle: "3-tier cleared" },
         ].map((stat, i) => (
           <motion.div key={stat.title} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
             <StatCard {...stat} animate={false} />
@@ -80,168 +82,131 @@ export function SuperAdminDashboard() {
 
       {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Students by College - Bar chart */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-5"
+        {/* Verification Results Pie */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+          className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs"
         >
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Students by College</h3>
-              <p className="text-[11px] text-slate-400 font-mono mt-0.5">Enrollment distribution</p>
-            </div>
-            <select className="text-[11px] font-mono border border-slate-200 rounded-lg px-2 py-1 text-slate-600 bg-white">
-              <option>Students</option>
-              <option>Interns</option>
-            </select>
-          </div>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={collegeStudentData} barSize={32}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="name" tick={{ fontSize: 11, fontFamily: "monospace" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 10, fontFamily: "monospace" }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="students" fill="#0ea5e9" radius={[6, 6, 0, 0]}>
-                {collegeStudentData.map((_, index) => (
-                  <Cell key={index} fill={COLORS[index % COLORS.length]} />
+          <h3 className="text-sm font-bold text-slate-900 mb-0.5">Verification Breakdown</h3>
+          <p className="text-[11px] text-slate-400 font-mono mb-3">All-time identity results</p>
+          {verificationPieData.length > 0 ? (
+            <div className="flex items-center gap-4">
+              <ResponsiveContainer width={110} height={110}>
+                <PieChart>
+                  <Pie data={verificationPieData} innerRadius={35} outerRadius={52} paddingAngle={3} dataKey="value">
+                    {verificationPieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-2 flex-1">
+                {verificationPieData.map((d) => (
+                  <div key={d.name} className="flex items-center gap-2 text-[11px]">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
+                    <span className="text-slate-600 flex-1">{d.name}</span>
+                    <span className="font-mono font-bold text-slate-900">{d.value.toLocaleString()}</span>
+                  </div>
                 ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+              </div>
+            </div>
+          ) : (
+            <div className="h-24 flex items-center justify-center">
+              <p className="text-[11px] text-slate-400 font-mono">No data yet</p>
+            </div>
+          )}
+        </motion.div>
+
+        {/* Internship Pie */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
+          className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs"
+        >
+          <h3 className="text-sm font-bold text-slate-900 mb-0.5">Internship Status</h3>
+          <p className="text-[11px] text-slate-400 font-mono mb-3">All submissions</p>
+          {internshipPieData.filter((d) => d.value > 0).length > 0 ? (
+            <div className="flex items-center gap-4">
+              <ResponsiveContainer width={110} height={110}>
+                <PieChart>
+                  <Pie data={internshipPieData} innerRadius={35} outerRadius={52} paddingAngle={3} dataKey="value">
+                    {internshipPieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-2 flex-1">
+                {internshipPieData.map((d) => (
+                  <div key={d.name} className="flex items-center gap-2 text-[11px]">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
+                    <span className="text-slate-600 flex-1">{d.name}</span>
+                    <span className="font-mono font-bold text-slate-900">{d.value.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="h-24 flex items-center justify-center">
+              <p className="text-[11px] text-slate-400 font-mono">No data yet</p>
+            </div>
+          )}
         </motion.div>
 
         {/* Attendance Trend */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-          className="bg-white border border-slate-200 rounded-2xl p-5"
-        >
-          <div className="mb-4">
-            <h3 className="text-sm font-bold text-slate-900">Attendance Trend</h3>
-            <p className="text-[11px] text-slate-400 font-mono">Platform-wide 6-month avg</p>
-          </div>
-          <ResponsiveContainer width="100%" height={180}>
-            <AreaChart data={mockMonthlyAttendance.super_admin}>
-              <defs>
-                <linearGradient id="attendGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="month" tick={{ fontSize: 10, fontFamily: "monospace" }} axisLine={false} tickLine={false} />
-              <YAxis domain={[75, 95]} tick={{ fontSize: 10, fontFamily: "monospace" }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="rate" stroke="#0ea5e9" strokeWidth={2} fill="url(#attendGrad)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </motion.div>
-      </div>
-
-      {/* Charts Row 2 - Pie charts + Flagged cases */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Internship Status Pie */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-white border border-slate-200 rounded-2xl p-5"
-        >
-          <h3 className="text-sm font-bold text-slate-900 mb-1">Internship Status (All)</h3>
-          <p className="text-[11px] text-slate-400 font-mono mb-3">2,481 Submissions</p>
-          <div className="flex items-center gap-4">
-            <ResponsiveContainer width={110} height={110}>
-              <PieChart>
-                <Pie data={internshipPieData} innerRadius={35} outerRadius={50} paddingAngle={3} dataKey="value">
-                  {internshipPieData.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="space-y-2">
-              {internshipPieData.map((d) => (
-                <div key={d.name} className="flex items-center gap-2 text-[11px]">
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
-                  <span className="text-slate-600">{d.name}</span>
-                  <span className="font-mono font-bold text-slate-900 ml-auto">{d.value.toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Verification Results Pie */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
-          className="bg-white border border-slate-200 rounded-2xl p-5"
-        >
-          <h3 className="text-sm font-bold text-slate-900 mb-1">Verification Results</h3>
-          <p className="text-[11px] text-slate-400 font-mono mb-3">2,481 Submissions</p>
-          <div className="flex items-center gap-4">
-            <ResponsiveContainer width={110} height={110}>
-              <PieChart>
-                <Pie data={verificationPieData} innerRadius={35} outerRadius={50} paddingAngle={3} dataKey="value">
-                  {verificationPieData.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="space-y-2">
-              {verificationPieData.map((d) => (
-                <div key={d.name} className="flex items-center gap-2 text-[11px]">
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
-                  <span className="text-slate-600">{d.name}</span>
-                  <span className="font-mono font-bold text-slate-900 ml-auto">{d.value.toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Flagged Cases Table */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="bg-white border border-slate-200 rounded-2xl p-5"
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+          className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs"
         >
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Recent Flagged Cases</h3>
-              <p className="text-[11px] text-slate-400 font-mono">Needs manual review</p>
+              <h3 className="text-sm font-bold text-slate-900">Attendance Trend</h3>
+              <p className="text-[11px] text-slate-400 font-mono">Platform-wide monthly avg</p>
             </div>
-            <a href="/verifications" className="text-[11px] text-sky-600 font-semibold flex items-center gap-0.5 hover:text-sky-700">
-              View All <ChevronRight className="w-3 h-3" />
-            </a>
-          </div>
-          <div className="space-y-2">
-            {mockFlaggedCases.map((fc) => (
-              <div key={fc.id} className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 border border-slate-200/60">
-                <div className="w-7 h-7 rounded-lg bg-rose-50 border border-rose-200 flex items-center justify-center shrink-0">
-                  <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-bold text-slate-900">{fc.student_id}</p>
-                  <p className="text-[10px] text-slate-500 font-mono">{fc.college} · {fc.issue}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-mono text-[10px] font-bold text-rose-600">{fc.confidence}%</p>
-                  <span className={`font-mono text-[9px] px-1.5 py-0.5 rounded font-bold ${fc.status === "Flagged" ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
-                    {fc.status}
-                  </span>
-                </div>
+            {attendanceAnalytics && (
+              <div className="flex items-center gap-1 text-emerald-600 font-mono text-[10px] font-bold">
+                <TrendingUp className="w-3 h-3" />
+                {attendanceAnalytics.average_attendance_rate?.toFixed(1)}%
               </div>
-            ))}
+            )}
           </div>
+          {monthlyTrend.length > 0 ? (
+            <ResponsiveContainer width="100%" height={130}>
+              <AreaChart data={monthlyTrend} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="dashAttend" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="month" tick={{ fontSize: 9, fontFamily: "monospace" }} axisLine={false} tickLine={false} />
+                <YAxis domain={[60, 100]} tick={{ fontSize: 9, fontFamily: "monospace" }} axisLine={false} tickLine={false} />
+                <Tooltip content={<CustomTooltip />} />
+                <Area type="monotone" dataKey="rate" stroke="#0ea5e9" strokeWidth={2} fill="url(#dashAttend)" dot={{ r: 3, fill: "#0ea5e9" }} />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[130px] flex items-center justify-center">
+              <p className="text-[11px] text-slate-400 font-mono">No trend data available</p>
+            </div>
+          )}
         </motion.div>
       </div>
+
+      {/* Quick Links Row */}
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
+      >
+        {[
+          { label: "Review Pending Verifications", href: "/verifications?status=manual_review", color: "text-amber-700 bg-amber-50 border-amber-200", dot: "bg-amber-500" },
+          { label: "Manage Colleges", href: "/colleges", color: "text-sky-700 bg-sky-50 border-sky-200", dot: "bg-sky-500" },
+          { label: "Audit Activity Logs", href: "/audit-logs", color: "text-slate-700 bg-slate-50 border-slate-200", dot: "bg-slate-500" },
+          { label: "System Configuration", href: "/system-config", color: "text-purple-700 bg-purple-50 border-purple-200", dot: "bg-purple-500" },
+        ].map(({ label, href, color, dot }) => (
+          <a key={href} href={href}
+            className={`flex items-center justify-between p-3.5 rounded-xl border text-[12px] font-semibold transition-all hover:shadow-sm group ${color}`}
+          >
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${dot}`} />
+              {label}
+            </div>
+            <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+          </a>
+        ))}
+      </motion.div>
     </div>
   );
 }
