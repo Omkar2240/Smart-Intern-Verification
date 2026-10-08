@@ -152,6 +152,29 @@ export default function VerificationHubScreen() {
           </View>
         </View>
 
+        {/* Rejection / Action Required Alert */}
+        {Boolean(
+          verificationStatus?.rejection_reason ||
+          verificationStatus?.overall_status === 'rejected' ||
+          verificationStatus?.college_id_status === 'rejected' ||
+          verificationStatus?.face_status === 'rejected'
+        ) && (
+          <View style={styles.rejectionBanner}>
+            <View style={styles.rejectionHeader}>
+              <Ionicons name="alert-circle" size={20} color="#DC2626" />
+              <Text style={styles.rejectionTitle}>Verification Alert</Text>
+            </View>
+            <Text style={styles.rejectionText}>
+              {verificationStatus?.rejection_reason ||
+                (verificationStatus?.college_id_status === 'rejected'
+                  ? 'Your uploaded College ID was rejected. Please review the guidelines and upload a clearer photo.'
+                  : verificationStatus?.face_status === 'rejected'
+                  ? 'Face verification was not approved. Please retake your biometric photo in a well-lit room.'
+                  : 'Your verification submission was not approved. Please retry the flagged steps below.')}
+            </Text>
+          </View>
+        )}
+
         {/* 3 Step Cards */}
         <View style={styles.stepsContainer}>
           {/* Step 1: College */}
@@ -573,5 +596,29 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
+  },
+  rejectionBanner: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#F87171',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 20,
+  },
+  rejectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  rejectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#991B1B',
+  },
+  rejectionText: {
+    fontSize: 13,
+    color: '#B91C1C',
+    lineHeight: 18,
   },
 });

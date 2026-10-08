@@ -75,6 +75,30 @@ function buildQuery(params: Record<string, unknown>): string {
 
 // ─── ApiClient ────────────────────────────────────────────────────────────────
 
+export function extractErrorMessage(errorData: any, fallback = "Request failed"): string {
+  if (!errorData) return fallback;
+  if (typeof errorData === "string") return errorData;
+  if (typeof errorData.detail === "string") return errorData.detail;
+  if (typeof errorData.message === "string") return errorData.message;
+  if (typeof errorData.error === "string") return errorData.error;
+  if (Array.isArray(errorData.detail)) {
+    return errorData.detail
+      .map((d: any) => {
+        if (typeof d === "string") return d;
+        const field = Array.isArray(d.loc) ? d.loc[d.loc.length - 1] : "";
+        const rawMsg = d.msg || JSON.stringify(d);
+        const cleanMsg = rawMsg.replace(/^Value error,\s*/i, "");
+        return field && field !== "body" ? `${field}: ${cleanMsg}` : cleanMsg;
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+  if (typeof errorData.detail === "object" && errorData.detail !== null) {
+    return errorData.detail.message || errorData.detail.error || JSON.stringify(errorData.detail);
+  }
+  return fallback;
+}
+
 class ApiClient {
   private token: string | null = null;
 
@@ -161,7 +185,7 @@ class ApiClient {
       let detail = `Server responded with ${response.status}`;
       try {
         const errJson = await response.json();
-        if (errJson?.detail) detail = errJson.detail;
+        detail = extractErrorMessage(errJson, detail);
       } catch {}
       throw new Error(detail);
     }

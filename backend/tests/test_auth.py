@@ -57,6 +57,15 @@ async def test_register_duplicate_mobile(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_register_exact_same_user_again(client: AsyncClient):
+    """When a registered user tries to register again with same details."""
+    await register_user(client)
+    resp = await client.post("/api/v1/auth/register", json=TEST_USER)
+    assert resp.status_code == 409
+    assert "already exists" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
 async def test_register_weak_password(client: AsyncClient):
     user = TEST_USER.copy()
     user["password"] = "weak"

@@ -2,13 +2,15 @@
 Admin API router — review queue, verification decisions, biometrics reset, analytics, and roster management.
 """
 
+import base64
 import os
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, status
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, RedirectResponse
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_admin, require_super_admin
@@ -105,36 +107,88 @@ async def get_card_image(
 ):
     """
     Securely stream the student's uploaded physical College ID document image for review.
+    If storage ref is a remote URL or base64, serves it appropriately.
     If ephemeral container disk restarted and the file was cleared, serves a synthesized
     vector ID badge from verified OCR record.
     """
-    iv = await AdminService.get_verification_item(db, user_id)
-    storage_ref = iv.college_id_storage_ref
-    if not storage_ref and iv.user and hasattr(iv.user, "profile") and iv.user.profile:
-        storage_ref = iv.user.profile.college_id_path
+    iv = None
+    user = None
+
+    try:
+        iv = await AdminService.get_verification_item(db, user_id)
+        user = iv.user
+    except HTTPException:
+        # User might exist without an IdentityVerification record yet
+        u_res = await db.execute(
+            select(User).where(User.id == user_id).options(selectinload(User.profile))
+        )
+        user = u_res.scalar_one_or_none()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User and verification record not found",
+            )
+
+    storage_ref = None
+    if iv:
+        storage_ref = iv.college_id_storage_ref
+    if not storage_ref and user:
+        profile = user.__dict__.get("profile")
+        if profile and hasattr(profile, "college_id_path"):
+            storage_ref = profile.college_id_path
 
     if storage_ref:
+        # Check if remote URL
+        if storage_ref.startswith(("http://", "https://")):
+            return RedirectResponse(url=storage_ref)
+
+        # Check if base64 data URL
+        if storage_ref.startswith("data:image/"):
+            try:
+                header, encoded = storage_ref.split(",", 1)
+                media_type = header.split(";")[0].replace("data:", "")
+                return Response(
+                    content=base64.b64decode(encoded),
+                    media_type=media_type,
+                    headers={"Cache-Control": "no-cache"},
+                )
+            except Exception:
+                pass
+
+        # Local file resolution via enhanced LocalStorage
         abs_path = _storage.get_abs_path(storage_ref)
-        if os.path.exists(abs_path):
+        if abs_path and os.path.exists(abs_path) and os.path.isfile(abs_path):
             ext = os.path.splitext(abs_path)[1].lower()
             media_type = "image/jpeg"
             if ext == ".png":
                 media_type = "image/png"
+            elif ext == ".webp":
+                media_type = "image/webp"
             elif ext == ".pdf":
                 media_type = "application/pdf"
-            return FileResponse(abs_path, media_type=media_type)
+            elif ext == ".svg":
+                media_type = "image/svg+xml"
+            return FileResponse(
+                abs_path,
+                media_type=media_type,
+                headers={"Cache-Control": "no-cache"},
+            )
 
     # Fallback to synthesized official SVG card based on student database record
-    student_name = iv.user.name if iv.user else "Student"
-    reg_number = iv.user.registration_number if iv.user else ""
-    college_name = iv.college.name if iv.college else "Institutional College"
+    student_name = user.name if user else "Student Intern"
+    reg_number = user.registration_number if user else ""
+    college_name = (iv.college.name if iv and iv.college else "Institutional College")
     dept = None
-    if iv.extracted_metadata and isinstance(iv.extracted_metadata, dict):
+    if iv and iv.extracted_metadata and isinstance(iv.extracted_metadata, dict):
         fields = iv.extracted_metadata.get("fields") or {}
         dept = fields.get("department")
 
     svg_bytes = _generate_fallback_id_card_svg(student_name, reg_number, college_name, dept)
-    return Response(content=svg_bytes, media_type="image/svg+xml")
+    return Response(
+        content=svg_bytes,
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 @router.post("/verifications/{user_id}/approve", response_model=AdminActionResponse)

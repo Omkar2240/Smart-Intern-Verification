@@ -66,9 +66,22 @@ class FaceVerificationService:
         if not image_bytes or len(image_bytes) < 100:
             raise FaceError("Captured image is empty or corrupted")
 
-        # Decode image from buffer
-        np_arr = np.frombuffer(image_bytes, np.uint8)
-        image_bgr = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        # Decode image and transpose based on EXIF orientation to ensure face is upright
+        try:
+            import io
+            from PIL import Image, ImageOps
+            with Image.open(io.BytesIO(image_bytes)) as pil_img:
+                pil_transposed = ImageOps.exif_transpose(pil_img)
+                if pil_transposed is not None:
+                    if pil_transposed.mode != "RGB":
+                        pil_transposed = pil_transposed.convert("RGB")
+                    image_bgr = cv2.cvtColor(np.array(pil_transposed), cv2.COLOR_RGB2BGR)
+                else:
+                    np_arr = np.frombuffer(image_bytes, np.uint8)
+                    image_bgr = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        except Exception:
+            np_arr = np.frombuffer(image_bytes, np.uint8)
+            image_bgr = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
         if image_bgr is None:
             raise FaceError("Unable to decode image file. Please provide a valid JPG or PNG image.")

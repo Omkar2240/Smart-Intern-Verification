@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -63,7 +64,9 @@ export function Register({ onRegister, isLoading = false }: RegisterProps) {
         });
       }
     } catch (e: any) {
-      setErrorMsg(e.message || 'Registration failed');
+      const msg = e?.message || 'Registration failed';
+      setErrorMsg(msg);
+      Alert.alert('Registration Failed', msg);
     }
   };
 
@@ -230,6 +233,14 @@ export function Register({ onRegister, isLoading = false }: RegisterProps) {
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* Bottom Error Banner */}
+            {errorMsg && (
+              <View style={styles.errorContainer}>
+                <Ionicons name="alert-circle-outline" size={18} color="#DC2626" />
+                <Text style={styles.errorText}>{errorMsg}</Text>
+              </View>
+            )}
 
             {/* Register Button */}
             <TouchableOpacity

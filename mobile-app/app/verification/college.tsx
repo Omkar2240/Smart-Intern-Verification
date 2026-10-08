@@ -25,10 +25,12 @@ export default function CollegeSelectionScreen() {
   const [selectedCollegeId, setSelectedCollegeId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const fetchColleges = async (query = '') => {
     try {
       setLoading(true);
+      setErrorMsg(null);
       const data = await api.getColleges(query);
       setColleges(data);
       // If none selected and there is a college, default select first
@@ -37,7 +39,9 @@ export default function CollegeSelectionScreen() {
       }
     } catch (e: any) {
       console.warn('Failed to load colleges:', e);
-      Alert.alert('Error', e.message || 'Could not load college directory');
+      const msg = e?.message || 'Could not load college directory';
+      setErrorMsg(msg);
+      Alert.alert('Error', msg);
     } finally {
       setLoading(false);
     }
@@ -48,7 +52,9 @@ export default function CollegeSelectionScreen() {
   }, [search]);
 
   const handleSelect = async () => {
+    setErrorMsg(null);
     if (!selectedCollegeId) {
+      setErrorMsg('Please select your college from the directory.');
       Alert.alert('Selection Required', 'Please select your college from the directory.');
       return;
     }
@@ -58,7 +64,9 @@ export default function CollegeSelectionScreen() {
       await refreshVerificationStatus();
       router.push('/verification/department' as any);
     } catch (e: any) {
-      Alert.alert('Selection Failed', e.message || 'Unable to save college selection');
+      const msg = e?.message || 'Unable to save college selection';
+      setErrorMsg(msg);
+      Alert.alert('Selection Failed', msg);
     } finally {
       setSubmitting(false);
     }
@@ -114,6 +122,14 @@ export default function CollegeSelectionScreen() {
         <Text style={styles.subtitle}>
           Choose your enrolled institution. This will be matched against your student ID card in the next step.
         </Text>
+
+        {/* Error Banner */}
+        {errorMsg && (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle-outline" size={18} color="#DC2626" />
+            <Text style={styles.errorText}>{errorMsg}</Text>
+          </View>
+        )}
 
         {/* Search Bar */}
         <View style={styles.searchContainer}>
@@ -423,5 +439,23 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#F87171',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+    gap: 8,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#B91C1C',
+    lineHeight: 18,
   },
 });

@@ -310,7 +310,7 @@ export function ReviewDrawer({
             {/* Tab 1: Digitized Smart ID Card */}
             {cardTab === "smart_card" && (
               <div className="flex flex-col gap-2.5">
-                <SmartIdCard item={item} />
+                <SmartIdCard item={item} imageUrl={imageUrl} />
                 {imageError && (
                   <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200 text-amber-800 text-[11px] flex items-center justify-between">
                     <span className="flex items-center gap-1.5">

@@ -8,6 +8,8 @@ services:
     region: oregon
     plan: free
     envVars:
+      - key: PORT
+        value: "8000"
       - key: DATABASE_URL
         sync: false          # Fill this in the Render dashboard with your Neon URL
       - key: SECRET_KEY

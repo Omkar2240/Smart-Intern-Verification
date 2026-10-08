@@ -16,9 +16,10 @@ import { VerificationItem } from "@/types/admin";
 interface SmartIdCardProps {
   item: VerificationItem;
   className?: string;
+  imageUrl?: string | null;
 }
 
-export function SmartIdCard({ item, className = "" }: SmartIdCardProps) {
+export function SmartIdCard({ item, className = "", imageUrl = null }: SmartIdCardProps) {
   const [copied, setCopied] = useState(false);
 
   const metadata = item.extracted_metadata || {};
@@ -181,10 +182,19 @@ export function SmartIdCard({ item, className = "" }: SmartIdCardProps) {
           {/* Left Column: Photo & RFID */}
           <div className="col-span-4 flex flex-col items-center gap-2.5">
             <div className="relative w-28 h-32 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 border-2 border-slate-300 flex flex-col items-center justify-center shadow-md overflow-hidden group">
-              {/* Silhouette / Initials */}
-              <div className="w-16 h-16 rounded-full bg-slate-900 text-sky-400 flex items-center justify-center font-extrabold text-xl shadow-inner border-2 border-white/50">
-                {initials || "ST"}
-              </div>
+              {imageUrl ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={imageUrl}
+                  alt={studentName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                /* Silhouette / Initials */
+                <div className="w-16 h-16 rounded-full bg-slate-900 text-sky-400 flex items-center justify-center font-extrabold text-xl shadow-inner border-2 border-white/50">
+                  {initials || "ST"}
+                </div>
+              )}
               <div className="absolute bottom-0 inset-x-0 bg-slate-900/90 py-1 text-center">
                 <span className="font-mono text-[9px] font-extrabold tracking-widest text-sky-300 uppercase">
                   Student ID

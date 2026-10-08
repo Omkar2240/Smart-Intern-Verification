@@ -6,7 +6,8 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -49,37 +50,55 @@ async def register_user(
     mobile_number: str,
     password: str,
 ) -> User:
-    """Register a new user. Raises AuthError on duplicate fields."""
-    # Normalize email
+    """Register a new user. Raises AuthError with friendly message on duplicate fields."""
+    # Normalize inputs
     email = email.lower().strip()
+    clean_reg = registration_number.strip()
+    clean_mob = mobile_number.strip()
 
-    # Check uniqueness
-    existing = await db.execute(
-        select(User).where(
-            (User.email == email)
-            | (User.registration_number == registration_number)
-            | (User.mobile_number == mobile_number)
+    # Check uniqueness (scalars().all() to avoid MultipleResultsFound error on multi-matches)
+    existing_records = (
+        await db.execute(
+            select(User).where(
+                (func.lower(User.email) == email)
+                | (func.lower(User.registration_number) == clean_reg.lower())
+                | (User.mobile_number == clean_mob)
+            )
         )
-    )
-    existing_user = existing.scalar_one_or_none()
-    if existing_user:
-        if existing_user.email == email:
-            raise AuthError("Email is already registered", 409)
-        if existing_user.registration_number == registration_number:
-            raise AuthError("Registration number is already in use", 409)
-        if existing_user.mobile_number == mobile_number:
-            raise AuthError("Mobile number is already in use", 409)
+    ).scalars().all()
+
+    if existing_records:
+        for ex in existing_records:
+            if ex.email and ex.email.lower() == email:
+                raise AuthError("An account with this email address already exists. Please log in instead.", 409)
+            if ex.registration_number and ex.registration_number.lower() == clean_reg.lower():
+                raise AuthError(f"Registration number '{clean_reg}' is already registered with an existing account.", 409)
+            if ex.mobile_number and ex.mobile_number == clean_mob:
+                raise AuthError(f"Mobile number '{clean_mob}' is already registered with another account.", 409)
+        raise AuthError("An account with these student credentials already exists. Please log in.", 409)
 
     # Create user
     user = User(
         name=name.strip(),
         email=email,
-        registration_number=registration_number.strip(),
-        mobile_number=mobile_number.strip(),
+        registration_number=clean_reg,
+        mobile_number=clean_mob,
         password_hash=hash_password(password),
     )
     db.add(user)
-    await db.flush()
+
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        await db.rollback()
+        err_msg = str(exc.orig) if hasattr(exc, "orig") else str(exc)
+        if "email" in err_msg.lower():
+            raise AuthError("An account with this email address already exists. Please log in instead.", 409)
+        if "registration_number" in err_msg.lower():
+            raise AuthError(f"Registration number '{clean_reg}' is already in use.", 409)
+        if "mobile_number" in err_msg.lower():
+            raise AuthError(f"Mobile number '{clean_mob}' is already in use.", 409)
+        raise AuthError("Student profile details conflict with an existing record. Please verify your details or log in.", 409)
 
     # Create email verification token
     raw_token = secrets.token_urlsafe(48)
