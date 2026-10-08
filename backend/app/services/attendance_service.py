@@ -67,6 +67,7 @@ def _date_range(
 async def list_attendance(
     db: AsyncSession,
     *,
+    admin_user: User,
     requested_date: date | None = None,
     date_filter: str | None = None,
     status_filter: str | None = None,
@@ -86,6 +87,7 @@ async def list_attendance(
         conditions.append(AttendanceRecord.status == status_filter)
     if search:
         conditions.append(User.name.ilike(f"%{search}%"))
+    conditions.extend(_admin_user_scope(admin_user))
 
     count_query = select(func.count(AttendanceRecord.id)).join(User)
     query = (

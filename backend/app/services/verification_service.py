@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.college import College
+from app.models.department import Department
 from app.models.face_embedding import FaceEmbedding
 from app.models.identity_verification import IdentityVerification
 from app.models.user import User
@@ -88,9 +89,14 @@ class VerificationService:
         if record.college:
             college_name = record.college.name
 
+        user = await db.get(User, user_id)
+        current_step = record.current_step
+        if record.college_status == COLLEGE_STATUS[1] and not user.department_id:
+            current_step = "department_selection"
+
         return VerificationStatusResponse(
             is_verified=record.overall_status == VERIFICATION_STATUS[2],  # verified
-            current_step=record.current_step,
+            current_step=current_step,
             college_id=record.college_id,
             college_name=college_name,
             college_verified=record.college_status == COLLEGE_STATUS[1],  # selected
@@ -108,7 +114,7 @@ class VerificationService:
         user_id: uuid.UUID,
         college_id: uuid.UUID,
     ) -> IdentityVerification:
-        """Select college for the user."""
+        """Select the user's college."""
         # Validate college
         college_stmt = select(College).where(College.id == college_id, College.is_active.is_(True))
         college_res = await db.execute(college_stmt)
@@ -121,10 +127,49 @@ class VerificationService:
 
         record.college_id = college.id
         record.college_status = COLLEGE_STATUS[1]  # selected
+        user = await db.get(User, user_id)
+        if user:
+            user.college_id = college.id
+            user.department_id = None
         # If overall status was not started, advance to pending
         if record.overall_status == DEFAULT_VERIFICATION_STATUS:  # not_started
             record.overall_status = VERIFICATION_STATUS[1]  # pending
 
+        await db.commit()
+        await db.refresh(record)
+        return record
+
+    async def select_department(
+        self,
+        db: AsyncSession,
+        user_id: uuid.UUID,
+        department_id: uuid.UUID,
+    ) -> IdentityVerification:
+        """Select an active department belonging to the user's selected college."""
+        record = await self.get_or_create_verification(db, user_id)
+        if record.college_status != COLLEGE_STATUS[1] or not record.college_id:
+            raise VerificationServiceError(
+                "Please select your college before selecting your department.",
+                status_code=400,
+            )
+
+        department_res = await db.execute(
+            select(Department).where(
+                Department.id == department_id,
+                Department.college_id == record.college_id,
+                Department.is_active.is_(True),
+            )
+        )
+        department = department_res.scalar_one_or_none()
+        if not department:
+            raise VerificationServiceError(
+                "Selected department does not belong to the selected college or is inactive.",
+                status_code=400,
+            )
+
+        user = await db.get(User, user_id)
+        if user:
+            user.department_id = department.id
         await db.commit()
         await db.refresh(record)
         return record
@@ -142,6 +187,11 @@ class VerificationService:
         if record.college_status != COLLEGE_STATUS[1] or not record.college_id:  # selected
             raise VerificationServiceError(
                 "Please select your college before uploading your college ID card.",
+                status_code=400,
+            )
+        if not user.department_id:
+            raise VerificationServiceError(
+                "Please select your department before uploading your college ID card.",
                 status_code=400,
             )
 

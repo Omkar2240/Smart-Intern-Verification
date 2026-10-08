@@ -26,6 +26,7 @@ import type {
   AdminUserFilterParams,
   CreateAdminUserPayload,
   StudentListResponse,
+  Student,
   StudentFilterParams,
   AttendanceListResponse,
   AttendanceAnalytics,
@@ -33,6 +34,10 @@ import type {
   AuditLogListResponse,
   AuditLogFilterParams,
   SystemConfig,
+  CreateStudentPayload,
+  UpdateStudentPayload,
+  AdminPermissionOption,
+  PlatformTrendResponse,
 } from "@/types/admin";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -211,6 +216,10 @@ class ApiClient {
     return this.request<AnalyticsSummary>("/admin/analytics/summary");
   }
 
+  async getPlatformTrends(period: "today" | "monthly" | "yearly" | "all" = "monthly"): Promise<PlatformTrendResponse> {
+    return this.request<PlatformTrendResponse>(`/admin/analytics/trends?period=${period}`);
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // VERIFICATIONS
   // ─────────────────────────────────────────────────────────────────────────
@@ -324,7 +333,8 @@ class ApiClient {
   /** Admin list (super_admin: all; college_admin: own college) */
   async getAdminDepartments(params: { college_id?: string; search?: string } = {}): Promise<Department[]> {
     const qs = buildQuery(params);
-    return this.request<Department[]>(`/admin/departments${qs}`);
+    const response = await this.request<Department[] | { items: Department[] }>(`/admin/departments${qs}`);
+    return Array.isArray(response) ? response : response.items;
   }
 
   async createDepartment(data: CreateDepartmentPayload): Promise<Department> {
@@ -357,6 +367,10 @@ class ApiClient {
     });
   }
 
+  async getAdminPermissions(): Promise<AdminPermissionOption[]> {
+    return this.request<AdminPermissionOption[]>("/admin/permissions");
+  }
+
   async toggleAdminStatus(adminId: string, isActive: boolean): Promise<ActionResponse> {
     return this.request<ActionResponse>(`/admin/admins/${adminId}/status`, {
       method: "PATCH",
@@ -371,6 +385,20 @@ class ApiClient {
   async getStudents(params: StudentFilterParams = {}): Promise<StudentListResponse> {
     const qs = buildQuery(params);
     return this.request<StudentListResponse>(`/admin/students${qs}`);
+  }
+
+  async createStudent(data: CreateStudentPayload): Promise<Student> {
+    return this.request<Student>("/admin/students", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateStudent(id: string, data: UpdateStudentPayload): Promise<Student> {
+    return this.request<Student>(`/admin/students/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
   }
 
   // ─────────────────────────────────────────────────────────────────────────

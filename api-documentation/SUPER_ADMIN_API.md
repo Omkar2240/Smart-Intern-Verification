@@ -10,8 +10,9 @@ The Super Admin has full platform-wide access to manage colleges, departments, a
 
 The existing review, internship, college, roster, attendance, and analytics routes
 are kept in the existing `/api/v1/admin` router. The following platform-management
-routes are implemented in the modular super-admin router and require
-`super_admin` access:
+routes are implemented in the modular admin router. Department and student
+management can be used by a `college_admin` for that admin's college; platform
+administration routes remain restricted to `super_admin`/`admin`:
 
 | Method | Endpoint | Purpose |
 |---|---|---|
@@ -21,7 +22,7 @@ routes are implemented in the modular super-admin router and require
 | PUT | `/api/v1/admin/departments/{department_id}` | Update a department |
 | GET/POST | `/api/v1/admin/admins` | List and create scoped administrators |
 | PATCH | `/api/v1/admin/admins/{admin_id}/status` | Activate/deactivate an administrator |
-| GET | `/api/v1/admin/students` | Paginated, filterable student directory |
+| GET/POST | `/api/v1/admin/students` | List or create students (college-scoped for college admins) |
 | GET | `/api/v1/admin/audit-logs` | Paginated audit history |
 | GET/PUT | `/api/v1/admin/system-config` | List and update platform configuration |
 
@@ -400,6 +401,24 @@ List all students across the platform.
   ]
 }
 ```
+
+---
+
+### POST /api/v1/admin/students
+Create a student record.
+
+**Access:** `super_admin`, `admin`, `college_admin`
+
+Platform admins must provide `name`, `college_id`, and `department_id`.
+College admins must provide `name`, `department_id`, and `registration_number`;
+`college_id` is always taken from the signed-in college admin. Email, mobile
+number, and password may be added later through the edit endpoint.
+
+### PATCH /api/v1/admin/students/{student_id}
+Edit a student record. The same fields can be supplied as needed:
+`name`, `email`, `registration_number`, `mobile_number`, `password`,
+`college_id`, and `department_id`. College admins can only edit students in
+their own college.
 
 ---
 

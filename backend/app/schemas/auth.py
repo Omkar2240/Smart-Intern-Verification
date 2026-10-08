@@ -133,6 +133,8 @@ class UserBrief(BaseModel):
     name: str
     email: str
     role: str = DEFAULT_USER_ROLE  # student
+    college_id: UUID | None = None
+    department_id: UUID | None = None
 
     model_config = {"from_attributes": True}
 

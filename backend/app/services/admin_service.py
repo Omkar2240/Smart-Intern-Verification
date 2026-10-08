@@ -2,7 +2,7 @@
 Admin Service — business logic for verification review, audit logs, rosters, and college management.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import io
 import csv
 from uuid import UUID
@@ -32,6 +32,8 @@ from app.schemas.admin import (
     AdminCollegeUpdate,
     AdminAnalyticsSummary,
     AdminRosterUploadResponse,
+    PlatformTrendResponse,
+    PlatformTrendData,
 )
 from app.core.constants import (
     VERIFICATION_STATUS,
@@ -39,17 +41,43 @@ from app.core.constants import (
     FACE_STATUS,
     PENDING_STATUS,
     COLLEGE_STATUS,
+    DEFAULT_USER_ROLE,
+    COLLEGE_ADMIN_ROLE,
+    DEPARTMENT_ADMIN_ROLE,
+    ADMIN_ROLES,
 )
 
 
 def _admin_user_scope(admin_user: User):
     """Return the user predicates allowed for an admin's dashboard."""
-    if admin_user.role in ("admin", "super_admin"):
-        return []
-    if admin_user.role == "department_admin":
-        return [User.department_id == admin_user.department_id] if admin_user.department_id else [false()]
-    if admin_user.role == "college_admin":
-        return [User.college_id == admin_user.college_id] if admin_user.college_id else [false()]
+    student_scope = [User.role == DEFAULT_USER_ROLE]
+    if admin_user.role in ADMIN_ROLES and admin_user.role not in (
+        COLLEGE_ADMIN_ROLE,
+        DEPARTMENT_ADMIN_ROLE,
+    ):
+        return student_scope
+    if admin_user.role == DEPARTMENT_ADMIN_ROLE:
+        if not admin_user.department_id or not admin_user.college_id:
+            return [false()]
+        return [
+            *student_scope,
+            User.college_id == admin_user.college_id,
+            User.department_id == admin_user.department_id,
+        ]
+    if admin_user.role == COLLEGE_ADMIN_ROLE:
+        return (
+            [
+                *student_scope,
+                or_(
+                    User.college_id == admin_user.college_id,
+                    User.identity_verification.has(
+                        IdentityVerification.college_id == admin_user.college_id
+                    ),
+                ),
+            ]
+            if admin_user.college_id
+            else student_scope
+        )
     return [false()]
 
 
@@ -62,6 +90,7 @@ class AdminService:
         college_id: UUID | None = None,
         page: int = 1,
         page_size: int = 20,
+        admin_user: User | None = None,
     ) -> AdminVerificationListResponse:
         """
         List student verifications with filtering for the Admin Review Queue.
@@ -88,8 +117,22 @@ class AdminService:
             elif status_filter == VERIFICATION_STATUS[1]:  # pending
                 conditions.append(IdentityVerification.overall_status == VERIFICATION_STATUS[1])
 
+        if admin_user:
+            if (
+                admin_user.role in ("college_admin", "department_admin")
+                and college_id
+                and admin_user.college_id != college_id
+            ):
+                raise HTTPException(status_code=403, detail="You can only access your college")
+            conditions.extend(_admin_user_scope(admin_user))
+
         if college_id:
-            conditions.append(IdentityVerification.college_id == college_id)
+            conditions.append(
+                or_(
+                    User.college_id == college_id,
+                    IdentityVerification.college_id == college_id,
+                )
+            )
 
         if search:
             search_pattern = f"%{search}%"
@@ -367,6 +410,7 @@ class AdminService:
         college_id: UUID | None = None,
         page: int = 1,
         page_size: int = 20,
+        admin_user: User | None = None,
     ) -> AdminInternshipListResponse:
         """
         List all student internships with filtering for admin oversight.
@@ -389,8 +433,22 @@ class AdminService:
         if status_filter and status_filter != "all":
             conditions.append(Internship.status == status_filter)
 
+        if admin_user:
+            if (
+                admin_user.role in ("college_admin", "department_admin")
+                and college_id
+                and admin_user.college_id != college_id
+            ):
+                raise HTTPException(status_code=403, detail="You can only access your college")
+            conditions.extend(_admin_user_scope(admin_user))
+
         if college_id:
-            conditions.append(IdentityVerification.college_id == college_id)
+            conditions.append(
+                or_(
+                    User.college_id == college_id,
+                    IdentityVerification.college_id == college_id,
+                )
+            )
 
         if search:
             search_pattern = f"%{search}%"
@@ -730,3 +788,92 @@ class AdminService:
             skipped_count=skipped,
             message=f"Roster import complete: {added} students added, {skipped} duplicate/invalid entries skipped.",
         )
+
+    @staticmethod
+    async def get_platform_trends(
+        db: AsyncSession,
+        period: str = "monthly",
+    ) -> PlatformTrendResponse:
+        """
+        Retrieve platform trend data for user registrations, logins, and college creations.
+        Supports time periods: today, monthly, yearly, all
+        """
+        now = datetime.now(timezone.utc)
+        
+        # Determine date range based on period
+        if period == "today":
+            start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            group_by = "hour"
+            date_format = "%H:00"
+        elif period == "monthly":
+            start_date = now - timedelta(days=30)
+            group_by = "day"
+            date_format = "%Y-%m-%d"
+        elif period == "yearly":
+            start_date = now - timedelta(days=365)
+            group_by = "month"
+            date_format = "%Y-%m"
+        else:  # all
+            start_date = datetime(2020, 1, 1, tzinfo=timezone.utc)
+            group_by = "month"
+            date_format = "%Y-%m"
+
+        # Query user registrations
+        date_trunc_expr = func.date_trunc(group_by, User.created_at).label("date")
+        user_reg_query = (
+            select(
+                date_trunc_expr,
+                func.count(User.id).label("count")
+            )
+            .where(User.created_at >= start_date)
+            .group_by(date_trunc_expr)
+            .order_by(date_trunc_expr)
+        )
+        user_reg_result = await db.execute(user_reg_query)
+        user_registrations = [
+            {"date": row.date.strftime(date_format), "count": row.count}
+            for row in user_reg_result
+        ]
+
+        # Query user logins (using last_login field)
+        login_date_trunc_expr = func.date_trunc(group_by, User.last_login).label("date")
+        user_login_query = (
+            select(
+                login_date_trunc_expr,
+                func.count(User.id).label("count")
+            )
+            .where(User.last_login.isnot(None), User.last_login >= start_date)
+            .group_by(login_date_trunc_expr)
+            .order_by(login_date_trunc_expr)
+        )
+        user_login_result = await db.execute(user_login_query)
+        user_logins = [
+            {"date": row.date.strftime(date_format), "count": row.count}
+            for row in user_login_result
+        ]
+
+        # Query college creations
+        college_date_trunc_expr = func.date_trunc(group_by, College.created_at).label("date")
+        college_query = (
+            select(
+                college_date_trunc_expr,
+                func.count(College.id).label("count")
+            )
+            .where(College.created_at >= start_date)
+            .group_by(college_date_trunc_expr)
+            .order_by(college_date_trunc_expr)
+        )
+        college_result = await db.execute(college_query)
+        college_creations = [
+            {"date": row.date.strftime(date_format), "count": row.count}
+            for row in college_result
+        ]
+
+        trend_data = PlatformTrendData(
+            period=period,
+            user_registrations=user_registrations,
+            user_logins=user_logins,
+            college_creations=college_creations,
+        )
+
+        return PlatformTrendResponse(data=trend_data)

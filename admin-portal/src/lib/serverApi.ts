@@ -158,10 +158,15 @@ export const serverApi = {
 
   // ── Departments ────────────────────────────────────────────────────────
 
-  async getDepartments(params: { college_id?: string; search?: string } = {}): Promise<Department[]> {
+  async getDepartments(params: { college_id?: string; search?: string; page?: number; page_size?: number } = {}): Promise<Department[]> {
     try {
-      const qs = buildQuery(params);
-      return await serverFetch<Department[]>(`/admin/departments${qs}`, {}, 60);
+      const qs = buildQuery({ ...params, page: 1, page_size: 100 }); // Fetch all departments
+      const response = await serverFetch<{ items: Department[] } | Department[]>(`/admin/departments${qs}`, {}, 60);
+      // Handle both paginated and non-paginated responses
+      if (Array.isArray(response)) {
+        return response;
+      }
+      return response?.items ?? [];
     } catch {
       return [];
     }

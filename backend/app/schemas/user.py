@@ -17,6 +17,8 @@ class UserResponse(BaseModel):
     registration_number: str
     mobile_number: str
     role: str = DEFAULT_USER_ROLE  # student
+    college_id: UUID | None = None
+    department_id: UUID | None = None
     is_active: bool
     is_verified: bool
     created_at: datetime

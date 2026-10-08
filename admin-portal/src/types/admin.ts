@@ -230,6 +230,13 @@ export interface CreateAdminUserPayload {
   role: "college_admin" | "department_admin" | "admin";
   college_id?: string | null;
   department_id?: string | null;
+  permissions?: string[];
+}
+
+export interface AdminPermissionOption {
+  key: string;
+  label: string;
+  description: string;
 }
 
 // ─── Student ────────────────────────────────────────────────────────────────────
@@ -257,6 +264,18 @@ export interface StudentListResponse {
   page: number;
   page_size: number;
 }
+
+export interface CreateStudentPayload {
+  name: string;
+  registration_number?: string;
+  email?: string;
+  mobile_number?: string;
+  password?: string;
+  college_id?: string;
+  department_id: string;
+}
+
+export type UpdateStudentPayload = Partial<CreateStudentPayload>;
 
 // ─── Attendance ─────────────────────────────────────────────────────────────────
 
@@ -306,6 +325,22 @@ export interface AnalyticsSummary {
   total_internships?: number;
   pending_internships?: number;
   verified_internships?: number;
+}
+
+export interface TrendDataPoint {
+  date: string;
+  count: number;
+}
+
+export interface PlatformTrendData {
+  period: string;
+  user_registrations: TrendDataPoint[];
+  user_logins: TrendDataPoint[];
+  college_creations: TrendDataPoint[];
+}
+
+export interface PlatformTrendResponse {
+  data: PlatformTrendData;
 }
 
 // ─── Audit Logs ─────────────────────────────────────────────────────────────────

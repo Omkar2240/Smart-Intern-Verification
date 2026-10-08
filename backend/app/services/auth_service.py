@@ -122,6 +122,10 @@ async def login_user(
     if not user.is_active:
         raise AuthError("Account is deactivated", 403)
 
+    # Update last_login timestamp
+    user.last_login = datetime.now(timezone.utc)
+    await db.flush()
+
     return await _issue_tokens(db, user)
 
 

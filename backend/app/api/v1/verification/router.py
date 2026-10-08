@@ -11,6 +11,7 @@ from app.api.deps import get_current_active_user
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.verification import (
+    SelectDepartmentRequest,
     SelectCollegeRequest,
     VerificationStatusResponse,
     VerificationStepResponse,
@@ -57,6 +58,30 @@ async def select_college(
             success=True,
             message="College selected successfully.",
             step=VERIFICATION_STEPS[0],  # college_selection
+            step_status=record.college_status,
+            overall_status=record.overall_status,
+        )
+    except VerificationServiceError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
+@router.post("/department", response_model=VerificationStepResponse)
+async def select_department(
+    body: SelectDepartmentRequest,
+    user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Step 2: Select an active department belonging to the selected college."""
+    try:
+        record = await verification_service.select_department(
+            db,
+            user_id=user.id,
+            department_id=body.department_id,
+        )
+        return VerificationStepResponse(
+            success=True,
+            message="Department selected successfully.",
+            step=VERIFICATION_STEPS[1],
             step_status=record.college_status,
             overall_status=record.overall_status,
         )

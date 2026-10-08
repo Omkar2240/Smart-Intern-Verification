@@ -4,7 +4,7 @@ Admin schemas for verification review queue, college administration, whitelist r
 
 from datetime import datetime
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 from app.schemas.internship import InternshipResponse
@@ -196,6 +196,7 @@ class AdminDepartmentResponse(BaseModel):
     hod_email: str | None
     is_active: bool
     student_count: int = 0
+    active_internships: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -214,6 +215,13 @@ class AdminUserCreate(BaseModel):
     college_id: UUID | None = None
     department_id: UUID | None = None
     password: str = Field(..., min_length=8, max_length=128)
+    permissions: list[str] = Field(default_factory=list)
+
+
+class AdminPermissionOption(BaseModel):
+    key: str
+    label: str
+    description: str
 
 
 class AdminUserResponse(BaseModel):
@@ -222,7 +230,10 @@ class AdminUserResponse(BaseModel):
     email: str
     role: str
     college_id: UUID | None
+    college_name: str | None = None
     department_id: UUID | None
+    department_name: str | None = None
+    permissions: list[str] = Field(default_factory=list)
     is_active: bool
     created_at: datetime
 
@@ -247,6 +258,26 @@ class AdminStudentResponse(BaseModel):
     internship_status: str
     is_verified: bool
     created_at: datetime
+
+
+class AdminStudentCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=255)
+    email: EmailStr | None = None
+    registration_number: str | None = Field(None, min_length=3, max_length=50)
+    mobile_number: str | None = Field(None, min_length=7, max_length=20)
+    password: str | None = Field(None, min_length=8, max_length=128)
+    college_id: UUID | None = None
+    department_id: UUID
+
+
+class AdminStudentUpdate(BaseModel):
+    name: str | None = Field(None, min_length=2, max_length=255)
+    email: EmailStr | None = None
+    registration_number: str | None = Field(None, min_length=3, max_length=50)
+    mobile_number: str | None = Field(None, min_length=7, max_length=20)
+    password: str | None = Field(None, min_length=8, max_length=128)
+    college_id: UUID | None = None
+    department_id: UUID | None = None
 
 
 class AdminAuditLogResponse(BaseModel):
@@ -274,3 +305,14 @@ class AdminSystemConfigUpdate(BaseModel):
     key: str = Field(..., min_length=1, max_length=100)
     value: dict
     description: str | None = Field(None, max_length=255)
+
+
+class PlatformTrendData(BaseModel):
+    period: str
+    user_registrations: list[dict]
+    user_logins: list[dict]
+    college_creations: list[dict]
+
+
+class PlatformTrendResponse(BaseModel):
+    data: PlatformTrendData
