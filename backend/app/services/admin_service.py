@@ -2,14 +2,14 @@
 Admin Service — business logic for verification review, audit logs, rosters, and college management.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import io
 import csv
 from uuid import UUID
 from typing import BinaryIO
 
 from fastapi import HTTPException, status
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, false
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -20,6 +20,7 @@ from app.models.face_embedding import FaceEmbedding
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.college_student_roster import CollegeStudentRoster
 from app.models.internship import Internship
+from app.models.department import Department
 from app.schemas.internship import InternshipResponse
 from app.schemas.admin import (
     AdminVerificationItem,
@@ -31,7 +32,53 @@ from app.schemas.admin import (
     AdminCollegeUpdate,
     AdminAnalyticsSummary,
     AdminRosterUploadResponse,
+    PlatformTrendResponse,
+    PlatformTrendData,
 )
+from app.core.constants import (
+    VERIFICATION_STATUS,
+    COLLEGE_ID_STATUS,
+    FACE_STATUS,
+    PENDING_STATUS,
+    COLLEGE_STATUS,
+    DEFAULT_USER_ROLE,
+    COLLEGE_ADMIN_ROLE,
+    DEPARTMENT_ADMIN_ROLE,
+    ADMIN_ROLES,
+)
+
+
+def _admin_user_scope(admin_user: User):
+    """Return the user predicates allowed for an admin's dashboard."""
+    student_scope = [User.role == DEFAULT_USER_ROLE]
+    if admin_user.role in ADMIN_ROLES and admin_user.role not in (
+        COLLEGE_ADMIN_ROLE,
+        DEPARTMENT_ADMIN_ROLE,
+    ):
+        return student_scope
+    if admin_user.role == DEPARTMENT_ADMIN_ROLE:
+        if not admin_user.department_id or not admin_user.college_id:
+            return [false()]
+        return [
+            *student_scope,
+            User.college_id == admin_user.college_id,
+            User.department_id == admin_user.department_id,
+        ]
+    if admin_user.role == COLLEGE_ADMIN_ROLE:
+        return (
+            [
+                *student_scope,
+                or_(
+                    User.college_id == admin_user.college_id,
+                    User.identity_verification.has(
+                        IdentityVerification.college_id == admin_user.college_id
+                    ),
+                ),
+            ]
+            if admin_user.college_id
+            else student_scope
+        )
+    return [false()]
 
 
 class AdminService:
@@ -43,6 +90,7 @@ class AdminService:
         college_id: UUID | None = None,
         page: int = 1,
         page_size: int = 20,
+        admin_user: User | None = None,
     ) -> AdminVerificationListResponse:
         """
         List student verifications with filtering for the Admin Review Queue.
@@ -60,17 +108,31 @@ class AdminService:
 
         conditions = []
         if status_filter and status_filter != "all":
-            if status_filter == "manual_review":
-                conditions.append(IdentityVerification.college_id_status == "manual_review")
-            elif status_filter == "verified":
-                conditions.append(IdentityVerification.overall_status == "verified")
-            elif status_filter == "rejected":
-                conditions.append(IdentityVerification.overall_status == "rejected")
-            elif status_filter == "pending":
-                conditions.append(IdentityVerification.overall_status == "pending")
+            if status_filter == COLLEGE_ID_STATUS[4]:  # manual_review
+                conditions.append(IdentityVerification.college_id_status == COLLEGE_ID_STATUS[4])
+            elif status_filter == VERIFICATION_STATUS[2]:  # verified
+                conditions.append(IdentityVerification.overall_status == VERIFICATION_STATUS[2])
+            elif status_filter == VERIFICATION_STATUS[3]:  # rejected
+                conditions.append(IdentityVerification.overall_status == VERIFICATION_STATUS[3])
+            elif status_filter == VERIFICATION_STATUS[1]:  # pending
+                conditions.append(IdentityVerification.overall_status == VERIFICATION_STATUS[1])
+
+        if admin_user:
+            if (
+                admin_user.role in ("college_admin", "department_admin")
+                and college_id
+                and admin_user.college_id != college_id
+            ):
+                raise HTTPException(status_code=403, detail="You can only access your college")
+            conditions.extend(_admin_user_scope(admin_user))
 
         if college_id:
-            conditions.append(IdentityVerification.college_id == college_id)
+            conditions.append(
+                or_(
+                    User.college_id == college_id,
+                    IdentityVerification.college_id == college_id,
+                )
+            )
 
         if search:
             search_pattern = f"%{search}%"
@@ -98,7 +160,7 @@ class AdminService:
 
         # Pagination & ordering (manual review first, then recent)
         query = query.order_by(
-            (IdentityVerification.college_id_status == "manual_review").desc(),
+            (IdentityVerification.college_id_status == COLLEGE_ID_STATUS[4]).desc(),  # manual_review
             IdentityVerification.updated_at.desc(),
         ).offset((page - 1) * page_size).limit(page_size)
 
@@ -174,16 +236,16 @@ class AdminService:
         """
         iv = await AdminService.get_verification_item(db, user_id)
 
-        iv.college_id_status = "verified"
+        iv.college_id_status = COLLEGE_ID_STATUS[2]  # verified
         iv.rejection_reason = None
 
         # Check if face is also verified
-        if iv.face_status == "verified":
-            iv.overall_status = "verified"
+        if iv.face_status == FACE_STATUS[2]:  # verified
+            iv.overall_status = VERIFICATION_STATUS[2]  # verified
             iv.verified_at = datetime.now(timezone.utc)
             iv.user.is_verified = True
         else:
-            iv.overall_status = "pending"
+            iv.overall_status = VERIFICATION_STATUS[1]  # pending
 
         # Record audit log
         audit = AdminAuditLog(
@@ -219,8 +281,8 @@ class AdminService:
         """
         iv = await AdminService.get_verification_item(db, user_id)
 
-        iv.college_id_status = "rejected"
-        iv.overall_status = "rejected"
+        iv.college_id_status = COLLEGE_ID_STATUS[3]  # rejected
+        iv.overall_status = VERIFICATION_STATUS[3]  # rejected
         iv.rejection_reason = reason
         iv.user.is_verified = False
 
@@ -260,8 +322,8 @@ class AdminService:
         for emb in embeddings_res.scalars().all():
             await db.delete(emb)
 
-        iv.face_status = "not_started"
-        iv.overall_status = "pending"
+        iv.face_status = FACE_STATUS[0]  # not_started
+        iv.overall_status = VERIFICATION_STATUS[1]  # pending
         iv.user.is_verified = False
 
         # Record audit log
@@ -306,17 +368,17 @@ class AdminService:
         if not iv:
             iv = IdentityVerification(
                 user_id=user.id,
-                college_status="verified",
-                college_id_status="verified",
-                face_status="verified",
-                overall_status="verified",
+                college_status=COLLEGE_STATUS[1],  # selected (using as verified)
+                college_id_status=COLLEGE_ID_STATUS[2],  # verified
+                face_status=FACE_STATUS[2],  # verified
+                overall_status=VERIFICATION_STATUS[2],  # verified
                 verified_at=now,
             )
             db.add(iv)
         else:
-            iv.college_id_status = "verified"
-            iv.face_status = "verified"
-            iv.overall_status = "verified"
+            iv.college_id_status = COLLEGE_ID_STATUS[2]  # verified
+            iv.face_status = FACE_STATUS[2]  # verified
+            iv.overall_status = VERIFICATION_STATUS[2]  # verified
             iv.rejection_reason = None
             iv.verified_at = now
 
@@ -336,7 +398,7 @@ class AdminService:
         return AdminActionResponse(
             success=True,
             message="Student successfully verified by administrator",
-            overall_status="verified",
+            overall_status=VERIFICATION_STATUS[2],  # verified
         )
 
     @staticmethod
@@ -348,6 +410,7 @@ class AdminService:
         college_id: UUID | None = None,
         page: int = 1,
         page_size: int = 20,
+        admin_user: User | None = None,
     ) -> AdminInternshipListResponse:
         """
         List all student internships with filtering for admin oversight.
@@ -370,8 +433,22 @@ class AdminService:
         if status_filter and status_filter != "all":
             conditions.append(Internship.status == status_filter)
 
+        if admin_user:
+            if (
+                admin_user.role in ("college_admin", "department_admin")
+                and college_id
+                and admin_user.college_id != college_id
+            ):
+                raise HTTPException(status_code=403, detail="You can only access your college")
+            conditions.extend(_admin_user_scope(admin_user))
+
         if college_id:
-            conditions.append(IdentityVerification.college_id == college_id)
+            conditions.append(
+                or_(
+                    User.college_id == college_id,
+                    IdentityVerification.college_id == college_id,
+                )
+            )
 
         if search:
             search_pattern = f"%{search}%"
@@ -397,7 +474,7 @@ class AdminService:
 
         # Order by pending first, then newest
         query = query.order_by(
-            (Internship.status == "pending").desc(),
+            (Internship.status == PENDING_STATUS).desc(),
             Internship.created_at.desc(),
         ).offset((page - 1) * page_size).limit(page_size)
 
@@ -473,11 +550,11 @@ class AdminService:
         if status:
             internship.status = status
         elif stage == "verified":
-            internship.status = "verified"
+            internship.status = VERIFICATION_STATUS[2]  # verified
         elif stage == "rejected":
-            internship.status = "rejected"
+            internship.status = VERIFICATION_STATUS[3]  # rejected
         else:
-            internship.status = "pending"
+            internship.status = PENDING_STATUS  # pending
 
         internship.rejection_reason = rejection_reason if stage == "rejected" else None
 
@@ -505,39 +582,75 @@ class AdminService:
         )
 
     @staticmethod
-    async def get_analytics_summary(db: AsyncSession) -> AdminAnalyticsSummary:
+    async def get_analytics_summary(
+        db: AsyncSession,
+        admin_user: User,
+    ) -> AdminAnalyticsSummary:
         """
-        Retrieve high-level verification dashboard KPIs.
+        Retrieve high-level verification dashboard KPIs for the admin's scope.
         """
-        total_users = (await db.execute(select(func.count(User.id)))).scalar() or 0
+        scope = _admin_user_scope(admin_user)
+        total_users = (await db.execute(select(func.count(User.id)).where(*scope))).scalar() or 0
         verified_users = (
             await db.execute(
-                select(func.count(IdentityVerification.id)).where(IdentityVerification.overall_status == "verified")
+                select(func.count(IdentityVerification.id))
+                .join(IdentityVerification.user)
+                .where(
+                    IdentityVerification.overall_status == VERIFICATION_STATUS[2],
+                    *scope,
+                )
             )
         ).scalar() or 0
         pending_reviews = (
             await db.execute(
-                select(func.count(IdentityVerification.id)).where(IdentityVerification.college_id_status == "manual_review")
+                select(func.count(IdentityVerification.id))
+                .join(IdentityVerification.user)
+                .where(
+                    IdentityVerification.college_id_status == COLLEGE_ID_STATUS[4],
+                    *scope,
+                )
             )
         ).scalar() or 0
         rejected_verifications = (
             await db.execute(
-                select(func.count(IdentityVerification.id)).where(IdentityVerification.overall_status == "rejected")
+                select(func.count(IdentityVerification.id))
+                .join(IdentityVerification.user)
+                .where(
+                    IdentityVerification.overall_status == VERIFICATION_STATUS[3],
+                    *scope,
+                )
             )
         ).scalar() or 0
-        active_colleges = (
-            await db.execute(select(func.count(College.id)).where(College.is_active == True))  # noqa: E712
-        ).scalar() or 0
+        college_scope = [College.is_active == True]  # noqa: E712
+        if admin_user.role == "college_admin":
+            college_scope.append(College.id == admin_user.college_id)
+        elif admin_user.role == "department_admin":
+            college_scope.extend(
+                [Department.id == admin_user.department_id]
+            )
+        college_query = select(func.count(College.id)).where(*college_scope)
+        if admin_user.role == "department_admin":
+            college_query = college_query.join(Department)
+        active_colleges = (await db.execute(college_query)).scalar() or 0
 
-        total_internships = (await db.execute(select(func.count(Internship.id)))).scalar() or 0
+        internship_scope = (
+            select(func.count(Internship.id))
+            .join(Internship.user)
+            .where(*scope)
+        )
+        total_internships = (await db.execute(internship_scope)).scalar() or 0
         pending_internships = (
             await db.execute(
-                select(func.count(Internship.id)).where(Internship.status == "pending")
+                select(func.count(Internship.id))
+                .join(Internship.user)
+                .where(Internship.status == PENDING_STATUS, *scope)
             )
         ).scalar() or 0
         verified_internships = (
             await db.execute(
-                select(func.count(Internship.id)).where(Internship.status == "verified")
+                select(func.count(Internship.id))
+                .join(Internship.user)
+                .where(Internship.status == VERIFICATION_STATUS[2], *scope)
             )
         ).scalar() or 0
 
@@ -554,12 +667,22 @@ class AdminService:
 
     @staticmethod
     async def create_college(db: AsyncSession, data: AdminCollegeCreate) -> College:
+        normalized_code = data.code.strip().upper() if data.code else None
+        if normalized_code:
+            existing = await db.execute(
+                select(College).where(College.code == normalized_code)
+            )
+            if existing.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="College code already exists",
+                )
         college = College(
-            name=data.name,
-            city=data.city,
-            state=data.state,
-            country=data.country,
-            code=data.code,
+            name=data.name.strip(),
+            city=data.city.strip(),
+            state=data.state.strip(),
+            country=data.country.strip(),
+            code=normalized_code,
             is_active=True,
         )
         db.add(college)
@@ -574,7 +697,24 @@ class AdminService:
         if not college:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="College not found")
 
-        for key, value in data.model_dump(exclude_unset=True).items():
+        values = data.model_dump(exclude_unset=True)
+        if "code" in values:
+            values["code"] = values["code"].strip().upper() if values["code"] else None
+            if values["code"]:
+                duplicate = await db.execute(
+                    select(College).where(
+                        College.code == values["code"], College.id != college.id
+                    )
+                )
+                if duplicate.scalar_one_or_none():
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="College code already exists",
+                    )
+
+        for key, value in values.items():
+            if isinstance(value, str):
+                value = value.strip()
             setattr(college, key, value)
 
         await db.commit()
@@ -648,3 +788,92 @@ class AdminService:
             skipped_count=skipped,
             message=f"Roster import complete: {added} students added, {skipped} duplicate/invalid entries skipped.",
         )
+
+    @staticmethod
+    async def get_platform_trends(
+        db: AsyncSession,
+        period: str = "monthly",
+    ) -> PlatformTrendResponse:
+        """
+        Retrieve platform trend data for user registrations, logins, and college creations.
+        Supports time periods: today, monthly, yearly, all
+        """
+        now = datetime.now(timezone.utc)
+        
+        # Determine date range based on period
+        if period == "today":
+            start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            group_by = "hour"
+            date_format = "%H:00"
+        elif period == "monthly":
+            start_date = now - timedelta(days=30)
+            group_by = "day"
+            date_format = "%Y-%m-%d"
+        elif period == "yearly":
+            start_date = now - timedelta(days=365)
+            group_by = "month"
+            date_format = "%Y-%m"
+        else:  # all
+            start_date = datetime(2020, 1, 1, tzinfo=timezone.utc)
+            group_by = "month"
+            date_format = "%Y-%m"
+
+        # Query user registrations
+        date_trunc_expr = func.date_trunc(group_by, User.created_at).label("date")
+        user_reg_query = (
+            select(
+                date_trunc_expr,
+                func.count(User.id).label("count")
+            )
+            .where(User.created_at >= start_date)
+            .group_by(date_trunc_expr)
+            .order_by(date_trunc_expr)
+        )
+        user_reg_result = await db.execute(user_reg_query)
+        user_registrations = [
+            {"date": row.date.strftime(date_format), "count": row.count}
+            for row in user_reg_result
+        ]
+
+        # Query user logins (using last_login field)
+        login_date_trunc_expr = func.date_trunc(group_by, User.last_login).label("date")
+        user_login_query = (
+            select(
+                login_date_trunc_expr,
+                func.count(User.id).label("count")
+            )
+            .where(User.last_login.isnot(None), User.last_login >= start_date)
+            .group_by(login_date_trunc_expr)
+            .order_by(login_date_trunc_expr)
+        )
+        user_login_result = await db.execute(user_login_query)
+        user_logins = [
+            {"date": row.date.strftime(date_format), "count": row.count}
+            for row in user_login_result
+        ]
+
+        # Query college creations
+        college_date_trunc_expr = func.date_trunc(group_by, College.created_at).label("date")
+        college_query = (
+            select(
+                college_date_trunc_expr,
+                func.count(College.id).label("count")
+            )
+            .where(College.created_at >= start_date)
+            .group_by(college_date_trunc_expr)
+            .order_by(college_date_trunc_expr)
+        )
+        college_result = await db.execute(college_query)
+        college_creations = [
+            {"date": row.date.strftime(date_format), "count": row.count}
+            for row in college_result
+        ]
+
+        trend_data = PlatformTrendData(
+            period=period,
+            user_registrations=user_registrations,
+            user_logins=user_logins,
+            college_creations=college_creations,
+        )
+
+        return PlatformTrendResponse(data=trend_data)

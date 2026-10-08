@@ -6,12 +6,14 @@ from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
+from app.core.constants import INTERNSHIP_TYPE_DEFAULT
+
 
 class InternshipBase(BaseModel):
     company_name: str
     role: str
     department: str | None = None
-    internship_type: str = "on_site"  # on_site, remote, hybrid
+    internship_type: str = INTERNSHIP_TYPE_DEFAULT  # on_site, remote, hybrid
     location: str | None = None
     supervisor_name: str | None = None
     supervisor_email: str | None = None

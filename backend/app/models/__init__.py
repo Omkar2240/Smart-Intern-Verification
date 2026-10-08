@@ -8,6 +8,9 @@ from app.models.face_embedding import FaceEmbedding
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.college_student_roster import CollegeStudentRoster
 from app.models.internship import Internship
+from app.models.attendance_record import AttendanceRecord
+from app.models.department import Department
+from app.models.system_config import SystemConfig
 
 __all__ = [
     "User",
@@ -20,4 +23,7 @@ __all__ = [
     "AdminAuditLog",
     "CollegeStudentRoster",
     "Internship",
+    "AttendanceRecord",
+    "Department",
+    "SystemConfig",
 ]

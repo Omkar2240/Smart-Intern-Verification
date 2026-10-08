@@ -58,12 +58,11 @@ export default function CollegeSelectionScreen() {
       Alert.alert('Selection Required', 'Please select your college from the directory.');
       return;
     }
-
     setSubmitting(true);
     try {
       await api.selectCollege(selectedCollegeId);
       await refreshVerificationStatus();
-      router.push('/verification/college_id' as any);
+      router.push('/verification/department' as any);
     } catch (e: any) {
       const msg = e?.message || 'Unable to save college selection';
       setErrorMsg(msg);
@@ -115,7 +114,7 @@ export default function CollegeSelectionScreen() {
             <Feather name="arrow-left" size={22} color="#1F2937" />
           </TouchableOpacity>
           <View style={styles.stepBadge}>
-            <Text style={styles.stepBadgeText}>Step 1 of 3</Text>
+            <Text style={styles.stepBadgeText}>Step 1 of 4</Text>
           </View>
         </View>
 
@@ -167,7 +166,7 @@ export default function CollegeSelectionScreen() {
               <View style={styles.emptyWrap}>
                 <Feather name="alert-circle" size={32} color="#9CA3AF" />
                 <Text style={styles.emptyTitle}>No colleges found</Text>
-                <Text style={styles.emptyDesc}>Try searching for "Raisoni" or "Nagpur"</Text>
+                <Text style={styles.emptyDesc}>Try searching for &quot;Raisoni&quot; or &quot;Nagpur&quot;</Text>
               </View>
             }
           />
@@ -176,7 +175,10 @@ export default function CollegeSelectionScreen() {
         {/* Bottom CTA */}
         <View style={styles.footer}>
           <TouchableOpacity
-            style={[styles.continueButton, !selectedCollegeId && styles.buttonDisabled]}
+            style={[
+              styles.continueButton,
+              !selectedCollegeId && styles.buttonDisabled,
+            ]}
             onPress={handleSelect}
             disabled={!selectedCollegeId || submitting}
             activeOpacity={0.85}
@@ -257,6 +259,66 @@ const styles = StyleSheet.create({
   listContent: {
     gap: 12,
     paddingBottom: 16,
+  },
+  departmentSection: {
+    marginBottom: 16,
+  },
+  departmentTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  departmentSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  departmentLoader: {
+    paddingVertical: 16,
+  },
+  departmentList: {
+    gap: 8,
+  },
+  departmentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+  },
+  departmentCardSelected: {
+    borderColor: '#F59E0B',
+    backgroundColor: '#FFFDF9',
+  },
+  departmentInfo: {
+    flex: 1,
+    marginRight: 10,
+  },
+  departmentName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  departmentNameSelected: {
+    color: '#B45309',
+  },
+  departmentCode: {
+    fontSize: 11,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  noDepartmentsText: {
+    fontSize: 13,
+    color: '#B45309',
+    backgroundColor: '#FEF3C7',
+    padding: 12,
+    borderRadius: 10,
   },
   collegeCard: {
     flexDirection: 'row',

@@ -98,9 +98,15 @@ export interface College {
   is_active: boolean;
 }
 
+export interface Department {
+  id: string;
+  name: string;
+  code: string;
+}
+
 export interface VerificationStatus {
   is_verified: boolean;
-  current_step: 'college_selection' | 'college_id' | 'face' | 'completed';
+  current_step: 'college_selection' | 'department_selection' | 'college_id' | 'face' | 'completed';
   college_id: string | null;
   college_name: string | null;
   college_verified: boolean;
@@ -468,12 +474,31 @@ class ApiService {
     return this.request<College[]>(`/api/v1/colleges${query}`, { method: 'GET' }, false);
   }
 
+  async getDepartments(collegeId: string): Promise<Department[]> {
+    return this.request<Department[]>(
+      `/api/v1/colleges/${collegeId}/departments`,
+      { method: 'GET' },
+      false
+    );
+  }
+
   async selectCollege(collegeId: string): Promise<VerificationStepResult> {
     return this.request<VerificationStepResult>(
       '/api/v1/verification/college',
       {
         method: 'POST',
         body: JSON.stringify({ college_id: collegeId }),
+      },
+      true
+    );
+  }
+
+  async selectDepartment(departmentId: string): Promise<VerificationStepResult> {
+    return this.request<VerificationStepResult>(
+      '/api/v1/verification/department',
+      {
+        method: 'POST',
+        body: JSON.stringify({ department_id: departmentId }),
       },
       true
     );
@@ -613,4 +638,3 @@ class ApiService {
 }
 
 export const api = new ApiService();
-

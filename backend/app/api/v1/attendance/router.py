@@ -5,9 +5,11 @@ Attendance API routes — protected by mandatory identity verification.
 from typing import Annotated
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_identity_verified
+from app.api.deps import get_db, require_identity_verified
 from app.models.user import User
+from app.services.attendance_service import mark_attendance as persist_attendance
 
 router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
@@ -29,12 +31,18 @@ class AttendanceResponse(BaseModel):
 async def mark_attendance(
     body: AttendanceMarkRequest,
     current_user: Annotated[User, Depends(require_identity_verified)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """
     Mark daily attendance.
     Protected: Only users who have completed identity verification can mark attendance.
     """
     from datetime import datetime, timezone
+    await persist_attendance(
+        db=db,
+        student_id=current_user.id,
+        company_id=body.company_id,
+    )
     return AttendanceResponse(
         status="success",
         message="Attendance recorded successfully.",

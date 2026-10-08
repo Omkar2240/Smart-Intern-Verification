@@ -5,10 +5,12 @@ Verification schemas for status, college selection, ID card upload, and face enr
 from uuid import UUID
 from pydantic import BaseModel
 
+from app.core.constants import VERIFICATION_STEPS
+
 
 class VerificationStatusResponse(BaseModel):
     is_verified: bool
-    current_step: str  # "college_selection" | "college_id" | "face" | "completed"
+    current_step: str  # VERIFICATION_STEPS values
     college_id: UUID | None = None
     college_name: str | None = None
     college_verified: bool
@@ -24,6 +26,10 @@ class VerificationStatusResponse(BaseModel):
 
 class SelectCollegeRequest(BaseModel):
     college_id: UUID
+
+
+class SelectDepartmentRequest(BaseModel):
+    department_id: UUID
 
 
 class VerificationStepResponse(BaseModel):

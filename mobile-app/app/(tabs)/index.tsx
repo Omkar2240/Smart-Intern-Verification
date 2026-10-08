@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/context/auth-context';
-import { api, StudentProfile, Internship } from '@/services/api';
+import { api, College, Department, StudentProfile, Internship } from '@/services/api';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -32,6 +32,11 @@ export default function HomeScreen() {
   const [college, setCollege] = useState('');
   const [branch, setBranch] = useState('');
   const [rollNumber, setRollNumber] = useState('');
+  const [colleges, setColleges] = useState<College[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [showCollegeOptions, setShowCollegeOptions] = useState(false);
+  const [showDepartmentOptions, setShowDepartmentOptions] = useState(false);
+  const [loadingDepartments, setLoadingDepartments] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
 
   // Time & Attendance State
@@ -126,6 +131,33 @@ export default function HomeScreen() {
     }, [])
   );
 
+  useEffect(() => {
+    if (!showProfileModal || colleges.length > 0) {
+      return;
+    }
+
+    api.getColleges()
+      .then(setColleges)
+      .catch((error: any) => {
+        Alert.alert('Error', error.message || 'Could not load the college directory');
+      });
+  }, [showProfileModal, colleges.length]);
+
+  const selectCollege = async (selectedCollege: College) => {
+    setCollege(selectedCollege.name);
+    setShowCollegeOptions(false);
+    setShowDepartmentOptions(true);
+    setLoadingDepartments(true);
+    try {
+      setDepartments(await api.getDepartments(selectedCollege.id));
+    } catch (error: any) {
+      setDepartments([]);
+      Alert.alert('Error', error.message || 'Could not load departments for this college');
+    } finally {
+      setLoadingDepartments(false);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadData();
@@ -190,7 +222,7 @@ export default function HomeScreen() {
 
   const handleSaveProfile = async () => {
     if (!college.trim() || !branch.trim() || !rollNumber.trim()) {
-      Alert.alert('Required Fields', 'Please fill in College, Branch, and Roll Number.');
+      Alert.alert('Required Fields', 'Please select a college, enter or select a department, and fill in Roll Number.');
       return;
     }
 
@@ -651,18 +683,67 @@ export default function HomeScreen() {
               <Text style={styles.inputLabel}>College / Institute</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="e.g. MIT / Stanford University"
+                placeholder="Select or enter your college"
                 value={college}
                 onChangeText={setCollege}
+                onFocus={() => setShowCollegeOptions(true)}
               />
+              {showCollegeOptions && colleges.length > 0 && (
+                <View style={styles.directoryOptions}>
+                  {colleges
+                    .filter((item) => item.name.toLowerCase().includes(college.toLowerCase()))
+                    .slice(0, 5)
+                    .map((item) => (
+                      <TouchableOpacity
+                        key={item.id}
+                        style={styles.directoryOption}
+                        onPress={() => selectCollege(item)}
+                      >
+                        <Text style={styles.directoryOptionTitle}>{item.name}</Text>
+                        <Text style={styles.directoryOptionSubtitle}>
+                          {[item.city, item.state].filter(Boolean).join(', ')}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                </View>
+              )}
 
               <Text style={styles.inputLabel}>Department / Branch</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="e.g. UX Design / Computer Science"
+                placeholder="Select or enter your department"
                 value={branch}
                 onChangeText={setBranch}
+                onFocus={() => setShowDepartmentOptions(true)}
               />
+              {showDepartmentOptions && (
+                <View style={styles.directoryOptions}>
+                  {loadingDepartments ? (
+                    <ActivityIndicator color="#F59E0B" />
+                  ) : departments.length > 0 ? (
+                    departments
+                      .filter((item) => item.name.toLowerCase().includes(branch.toLowerCase()))
+                      .slice(0, 6)
+                      .map((item) => (
+                        <TouchableOpacity
+                          key={item.id}
+                          style={styles.directoryOption}
+                          onPress={() => {
+                            setBranch(item.name);
+                            setShowDepartmentOptions(false);
+                          }}
+                        >
+                          <Text style={styles.directoryOptionTitle}>{item.name}</Text>
+                          <Text style={styles.directoryOptionSubtitle}>{item.code}</Text>
+                        </TouchableOpacity>
+                      ))
+                  ) : (
+                    <Text style={styles.directoryEmptyText}>
+                      No departments found. You can enter your department manually.
+                    </Text>
+                  )}
+                </View>
+              )}
 
               <Text style={styles.inputLabel}>Roll Number</Text>
               <TextInput
@@ -1288,6 +1369,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#111827',
     marginBottom: 8,
+  },
+  directoryOptions: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    marginTop: -4,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  directoryOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  directoryOptionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  directoryOptionSubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  directoryEmptyText: {
+    padding: 12,
+    fontSize: 12,
+    color: '#6B7280',
   },
   saveProfileBtn: {
     backgroundColor: '#FFA500',

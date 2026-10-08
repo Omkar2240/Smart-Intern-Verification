@@ -17,7 +17,8 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "TrackIntern Admin Console — Biometric & Internship Oversight",
-  description: "Administrative console for multi-stage verification queues, college whitelist rosters, and attendance audits.",
+  description:
+    "Administrative console for multi-stage verification queues, college whitelist rosters, and attendance audits.",
 };
 
 export default function RootLayout({
@@ -26,8 +27,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`h-full ${plusJakarta.variable} ${jetbrainsMono.variable}`}>
-      <body className="min-h-full bg-[#f8fafc] text-slate-900 antialiased selection:bg-sky-500/20 selection:text-sky-900 bg-ambient-glow bg-fixed">
+    <html
+      lang="en"
+      className={`h-full ${plusJakarta.variable} ${jetbrainsMono.variable}`}
+    >
+      <body
+        className="min-h-full bg-[#f8fafc] text-slate-900 antialiased selection:bg-sky-500/20 selection:text-sky-900 bg-ambient-glow bg-fixed"
+        suppressHydrationWarning
+      >
         <AdminAuthProvider>{children}</AdminAuthProvider>
       </body>
     </html>

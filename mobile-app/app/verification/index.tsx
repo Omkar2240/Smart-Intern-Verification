@@ -41,12 +41,14 @@ export default function VerificationHubScreen() {
     switch (step) {
       case 'college_selection':
         return 1;
-      case 'college_id':
+      case 'department_selection':
         return 2;
-      case 'face':
+      case 'college_id':
         return 3;
-      case 'completed':
+      case 'face':
         return 4;
+      case 'completed':
+        return 5;
       default:
         return 1;
     }
@@ -63,6 +65,9 @@ export default function VerificationHubScreen() {
     switch (verificationStatus?.current_step) {
       case 'college_selection':
         router.push('/verification/college' as any);
+        break;
+      case 'department_selection':
+        router.push('/verification/department' as any);
         break;
       case 'college_id':
         router.push('/verification/college_id' as any);
@@ -115,12 +120,14 @@ export default function VerificationHubScreen() {
           <View style={styles.progressHeader}>
             <Text style={styles.progressLabel}>Verification Progress</Text>
             <Text style={styles.progressPercent}>
-              {currentStepNum === 4
+              {currentStepNum === 5
                 ? '100%'
+                : currentStepNum === 4
+                ? '80%'
                 : currentStepNum === 3
-                ? '66%'
+                ? '60%'
                 : currentStepNum === 2
-                ? '33%'
+                ? '35%'
                 : '10%'}
             </Text>
           </View>
@@ -130,12 +137,14 @@ export default function VerificationHubScreen() {
                 styles.progressBarFill,
                 {
                   width:
-                    currentStepNum === 4
+                    currentStepNum === 5
                       ? '100%'
+                      : currentStepNum === 4
+                      ? '80%'
                       : currentStepNum === 3
-                      ? '66%'
+                      ? '60%'
                       : currentStepNum === 2
-                      ? '33%'
+                      ? '35%'
                       : '10%',
                 },
               ]}
@@ -211,7 +220,7 @@ export default function VerificationHubScreen() {
             <Feather name="chevron-right" size={20} color="#9CA3AF" />
           </TouchableOpacity>
 
-          {/* Step 2: College ID */}
+          {/* Step 2: Department */}
           <TouchableOpacity
             style={[
               styles.stepCard,
@@ -219,7 +228,7 @@ export default function VerificationHubScreen() {
             ]}
             onPress={() => {
               if (currentStepNum >= 2) {
-                router.push('/verification/college_id' as any);
+                router.push('/verification/department' as any);
               } else {
                 Alert.alert('Step 1 Required', 'Please select your college first.');
               }
@@ -227,7 +236,7 @@ export default function VerificationHubScreen() {
             activeOpacity={0.8}
           >
             <View style={styles.stepIconWrap}>
-              {verificationStatus?.college_id_verified ? (
+              {verificationStatus?.college_verified && verificationStatus?.current_step !== 'department_selection' ? (
                 <View style={[styles.stepIconBadge, styles.stepIconDone]}>
                   <Ionicons name="checkmark" size={20} color="#FFFFFF" />
                 </View>
@@ -251,23 +260,18 @@ export default function VerificationHubScreen() {
             </View>
             <View style={styles.stepInfo}>
               <View style={styles.stepTitleRow}>
-                <Text style={styles.stepTitle}>College ID Card</Text>
-                {verificationStatus?.college_id_status === 'manual_review' && (
-                  <View style={styles.reviewPill}>
-                    <Text style={styles.reviewPillText}>Under Review</Text>
-                  </View>
-                )}
+                <Text style={styles.stepTitle}>Select Department</Text>
               </View>
               <Text style={styles.stepDesc}>
-                {verificationStatus?.college_id_verified
-                  ? 'ID card verified and matched'
-                  : 'Capture or upload front photo of your student ID card'}
+                {verificationStatus?.current_step !== 'department_selection'
+                  ? 'Department selected'
+                  : 'Select the department for your college'}
               </Text>
             </View>
             <Feather name="chevron-right" size={20} color="#9CA3AF" />
           </TouchableOpacity>
 
-          {/* Step 3: Face */}
+          {/* Step 3: College ID */}
           <TouchableOpacity
             style={[
               styles.stepCard,
@@ -275,7 +279,7 @@ export default function VerificationHubScreen() {
             ]}
             onPress={() => {
               if (currentStepNum >= 3) {
-                router.push('/verification/face' as any);
+                router.push('/verification/college_id' as any);
               } else {
                 Alert.alert('Previous Steps Required', 'Please complete Steps 1 and 2 first.');
               }
@@ -283,7 +287,7 @@ export default function VerificationHubScreen() {
             activeOpacity={0.8}
           >
             <View style={styles.stepIconWrap}>
-              {verificationStatus?.face_verified ? (
+              {verificationStatus?.college_id_verified ? (
                 <View style={[styles.stepIconBadge, styles.stepIconDone]}>
                   <Ionicons name="checkmark" size={20} color="#FFFFFF" />
                 </View>
@@ -306,11 +310,50 @@ export default function VerificationHubScreen() {
               )}
             </View>
             <View style={styles.stepInfo}>
+              <View style={styles.stepTitleRow}>
+                <Text style={styles.stepTitle}>College ID Card</Text>
+                {verificationStatus?.college_id_status === 'manual_review' && (
+                  <View style={styles.reviewPill}>
+                    <Text style={styles.reviewPillText}>Under Review</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.stepDesc}>
+                {verificationStatus?.college_id_verified
+                  ? 'ID card verified and matched'
+                  : 'Capture or upload front photo of your student ID card'}
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          {/* Step 4: Face */}
+          <TouchableOpacity
+            style={[styles.stepCard, currentStepNum === 4 && styles.stepCardActive]}
+            onPress={() => {
+              if (currentStepNum >= 4) {
+                router.push('/verification/face' as any);
+              } else {
+                Alert.alert('Previous Steps Required', 'Please complete the college, department, and ID card steps first.');
+              }
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={styles.stepIconWrap}>
+              {verificationStatus?.face_verified ? (
+                <View style={[styles.stepIconBadge, styles.stepIconDone]}>
+                  <Ionicons name="checkmark" size={20} color="#FFFFFF" />
+                </View>
+              ) : (
+                <View style={[styles.stepIconBadge, currentStepNum === 4 ? styles.stepIconCurrent : styles.stepIconPending]}>
+                  <Text style={[styles.stepNumberText, currentStepNum === 4 ? styles.stepNumberCurrent : styles.stepNumberPending]}>4</Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.stepInfo}>
               <Text style={styles.stepTitle}>Live Face Enrollment</Text>
               <Text style={styles.stepDesc}>
-                {verificationStatus?.face_verified
-                  ? 'ArcFace biometric embedding enrolled'
-                  : 'Capture live face with 3D anti-spoofing detection'}
+                {verificationStatus?.face_verified ? 'ArcFace biometric embedding enrolled' : 'Capture live face with 3D anti-spoofing detection'}
               </Text>
             </View>
             <Feather name="chevron-right" size={20} color="#9CA3AF" />
@@ -332,12 +375,14 @@ export default function VerificationHubScreen() {
           activeOpacity={0.85}
         >
           <Text style={styles.primaryButtonText}>
-            {currentStepNum === 4
+            {currentStepNum === 5
               ? 'View Completed Verification'
-              : currentStepNum === 3
+              : currentStepNum === 4
               ? 'Start Face Enrollment'
-              : currentStepNum === 2
+              : currentStepNum === 3
               ? 'Upload College ID'
+              : currentStepNum === 2
+              ? 'Select Department'
               : 'Select College'}
           </Text>
           <Feather name="arrow-right" size={20} color="#FFFFFF" style={{ marginLeft: 8 }} />

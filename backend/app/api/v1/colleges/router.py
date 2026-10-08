@@ -11,7 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.models.college import College
+from app.models.department import Department
 from app.schemas.college import CollegeResponse
+from app.schemas.department import DepartmentDirectoryResponse
 
 router = APIRouter(prefix="/colleges", tags=["Colleges"])
 
@@ -58,3 +60,27 @@ async def get_college(
         )
 
     return college
+
+
+@router.get("/{college_id}/departments", response_model=List[DepartmentDirectoryResponse])
+async def list_college_departments(
+    college_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """List active departments belonging to an active college."""
+    college = await db.get(College, college_id)
+    if not college or not college.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="College not found",
+        )
+
+    result = await db.execute(
+        select(Department)
+        .where(
+            Department.college_id == college_id,
+            Department.is_active.is_(True),
+        )
+        .order_by(Department.name.asc())
+    )
+    return result.scalars().all()

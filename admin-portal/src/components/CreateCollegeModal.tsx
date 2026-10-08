@@ -37,7 +37,7 @@ export function CreateCollegeModal({
       setError(null);
       await api.createCollege({
         name,
-        code: code.trim().toUpperCase() || undefined,
+        code: code.trim().toUpperCase() || "",
         city,
         state,
         country,

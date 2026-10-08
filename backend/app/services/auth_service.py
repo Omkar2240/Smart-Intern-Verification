@@ -141,7 +141,49 @@ async def login_user(
     if not user.is_active:
         raise AuthError("Account is deactivated", 403)
 
+    # Update last_login timestamp
+    user.last_login = datetime.now(timezone.utc)
+    await db.flush()
+
     return await _issue_tokens(db, user)
+
+
+async def change_password(
+    db: AsyncSession,
+    *,
+    user: User,
+    current_password: str,
+    new_password: str,
+) -> None:
+    """Change a password after verifying the current credential."""
+    if not verify_password(current_password, user.password_hash):
+        raise AuthError("Current password is incorrect", 400)
+    user.password_hash = hash_password(new_password)
+    await _revoke_all_user_tokens(db, user.id)
+    await db.flush()
+
+
+async def update_user_profile(
+    db: AsyncSession,
+    *,
+    user: User,
+    name: str | None = None,
+    email: str | None = None,
+) -> User:
+    """Update editable profile fields while preserving unique-field guarantees."""
+    if email is not None:
+        normalized_email = email.lower().strip()
+        if normalized_email != user.email:
+            result = await db.execute(
+                select(User).where(User.email == normalized_email, User.id != user.id)
+            )
+            if result.scalar_one_or_none():
+                raise AuthError("Email is already registered", 409)
+            user.email = normalized_email
+    if name is not None:
+        user.name = name.strip()
+    await db.flush()
+    return user
 
 
 # ---------------------------------------------------------------------------

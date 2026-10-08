@@ -247,3 +247,39 @@ async def test_logout_all(client: AsyncClient):
         json={"refresh_token": tokens["refresh_token"]},
     )
     assert resp2.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_update_profile_and_change_password(client: AsyncClient):
+    tokens = await register_user(client)
+    headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+
+    profile = await client.patch(
+        "/api/v1/users/me",
+        json={"name": "Updated Name", "email": "updated@example.com"},
+        headers=headers,
+    )
+    assert profile.status_code == 200
+    assert profile.json()["name"] == "Updated Name"
+    assert profile.json()["email"] == "updated@example.com"
+
+    changed = await client.post(
+        "/api/v1/users/me/change-password",
+        json={
+            "current_password": TEST_USER["password"],
+            "new_password": "NewStrongPassword@123",
+        },
+        headers=headers,
+    )
+    assert changed.status_code == 200
+
+    old_login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "updated@example.com", "password": TEST_USER["password"]},
+    )
+    assert old_login.status_code == 401
+    new_login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "updated@example.com", "password": "NewStrongPassword@123"},
+    )
+    assert new_login.status_code == 200

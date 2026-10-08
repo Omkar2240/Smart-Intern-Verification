@@ -10,11 +10,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.models.college import College
+from app.models.department import Department
 from app.models.identity_verification import IdentityVerification
 from app.models.face_embedding import FaceEmbedding
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.college_student_roster import CollegeStudentRoster
+from app.models.internship import Internship
+from app.core.constants import INTERNSHIP_TYPES
 from app.core.security import create_access_token
+from app.schemas.admin import AdminUserCreate
+from app.services.super_admin_service import SuperAdminService
 from tests.conftest import register_user
 
 
@@ -58,6 +63,47 @@ async def test_admin_access_control(client: AsyncClient, db_session: AsyncSessio
     assert resp_admin.status_code == 200
     assert "items" in resp_admin.json()
     assert "total" in resp_admin.json()
+
+
+@pytest.mark.asyncio
+async def test_admin_student_create_and_update_with_role_scoping(
+    client: AsyncClient, db_session: AsyncSession
+):
+    college = College(
+        name="Student College", city="Pune", state="Maharashtra",
+        country="India", code="SC", is_active=True,
+    )
+    db_session.add(college)
+    await db_session.flush()
+    department = Department(
+        college_id=college.id, name="Computer Science", code="CSE", is_active=True
+    )
+    db_session.add(department)
+    await db_session.flush()
+
+    college_admin, college_token = await create_admin_user(db_session, "college_admin")
+    college_admin.college_id = college.id
+    await db_session.commit()
+
+    create_response = await client.post(
+        "/api/v1/admin/students",
+        json={"name": "New Student", "department_id": str(department.id), "registration_number": "SC-001"},
+        headers={"Authorization": f"Bearer {college_token}"},
+    )
+    assert create_response.status_code == 201
+    created = create_response.json()
+    assert created["college_id"] == str(college.id)
+    assert created["department_id"] == str(department.id)
+    assert created["registration_number"] == "SC-001"
+    assert created["role"] == "student"
+
+    update_response = await client.patch(
+        f"/api/v1/admin/students/{created['id']}",
+        json={"email": "student@example.com", "mobile_number": "9876543210"},
+        headers={"Authorization": f"Bearer {college_token}"},
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["email"] == "student@example.com"
 
 
 @pytest.mark.asyncio
@@ -279,6 +325,269 @@ async def test_admin_analytics_summary(client: AsyncClient, db_session: AsyncSes
 
 
 @pytest.mark.asyncio
+async def test_admin_analytics_summary_counts_students_within_role_scope(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """Analytics must exclude admins and enforce college/department boundaries."""
+    college_one = College(
+        name="College One",
+        city="Pune",
+        state="Maharashtra",
+        country="India",
+        code="COL1",
+        is_active=True,
+    )
+    college_two = College(
+        name="College Two",
+        city="Mumbai",
+        state="Maharashtra",
+        country="India",
+        code="COL2",
+        is_active=True,
+    )
+    db_session.add_all([college_one, college_two])
+    await db_session.flush()
+
+    department_one = Department(
+        college_id=college_one.id,
+        name="Engineering",
+        code="ENG",
+    )
+    department_two = Department(
+        college_id=college_one.id,
+        name="Science",
+        code="SCI",
+    )
+    department_other_college = Department(
+        college_id=college_two.id,
+        name="Engineering",
+        code="ENG",
+    )
+    db_session.add_all(
+        [department_one, department_two, department_other_college]
+    )
+    await db_session.flush()
+
+    def student(email: str, college_id, department_id) -> User:
+        suffix = email.split("@")[0]
+        return User(
+            email=email,
+            name=suffix,
+            registration_number=f"REG_{suffix}",
+            mobile_number=f"9{uuid4().int % 10**9:09d}",
+            password_hash="hashed_pw",
+            role="student",
+            college_id=college_id,
+            department_id=department_id,
+        )
+
+    db_session.add_all(
+        [
+            student("one_eng@example.com", college_one.id, department_one.id),
+            student("two_eng@example.com", college_one.id, department_one.id),
+            student("one_sci@example.com", college_one.id, department_two.id),
+            student(
+                "other_college_eng@example.com",
+                college_two.id,
+                department_other_college.id,
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    super_admin, super_token = await create_admin_user(
+        db_session, role="super_admin"
+    )
+    college_admin, college_token = await create_admin_user(
+        db_session, role="college_admin"
+    )
+    college_admin.college_id = college_one.id
+    department_admin, department_token = await create_admin_user(
+        db_session, role="department_admin"
+    )
+    department_admin.college_id = college_one.id
+    department_admin.department_id = department_one.id
+    await db_session.commit()
+
+    async def total_users(token: str) -> int:
+        response = await client.get(
+            "/api/v1/admin/analytics/summary",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        return response.json()["total_users"]
+
+    assert await total_users(super_token) == 4
+    assert await total_users(college_token) == 3
+    assert await total_users(department_token) == 2
+
+
+@pytest.mark.asyncio
+async def test_department_admin_lists_only_its_college_department(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """Department admins must not see adjacent departments in review or internship queues."""
+    college = College(
+        name="Scoped College",
+        city="Pune",
+        state="Maharashtra",
+        country="India",
+        code="SCOPE",
+    )
+    other_college = College(
+        name="Other Scoped College",
+        city="Mumbai",
+        state="Maharashtra",
+        country="India",
+        code="SCOPE2",
+    )
+    db_session.add_all([college, other_college])
+    await db_session.flush()
+    department = Department(college_id=college.id, name="Mechanical", code="ME")
+    other_department = Department(college_id=college.id, name="Civil", code="CE")
+    foreign_department = Department(
+        college_id=other_college.id, name="Mechanical", code="ME"
+    )
+    db_session.add_all([department, other_department, foreign_department])
+    await db_session.flush()
+
+    def make_student(name: str, college_id, department_id) -> User:
+        suffix = uuid4().hex
+        return User(
+            name=name,
+            email=f"{suffix}@example.com",
+            registration_number=f"REG-{suffix}",
+            mobile_number=f"9{uuid4().int % 10**9:09d}",
+            password_hash="hashed_pw",
+            role="student",
+            college_id=college_id,
+            department_id=department_id,
+        )
+
+    scoped_student = make_student("Mechanical Student", college.id, department.id)
+    same_college_student = make_student("Civil Student", college.id, other_department.id)
+    foreign_student = make_student(
+        "Foreign Mechanical Student", other_college.id, foreign_department.id
+    )
+    db_session.add_all([scoped_student, same_college_student, foreign_student])
+    await db_session.flush()
+    db_session.add_all(
+        [
+            IdentityVerification(
+                user_id=student.id,
+                college_id=student.college_id,
+                overall_status="pending",
+            )
+            for student in (scoped_student, same_college_student, foreign_student)
+        ]
+    )
+    db_session.add_all(
+        [
+            Internship(
+                user_id=student.id,
+                company_name=f"{student.name} Company",
+                role="Intern",
+            )
+            for student in (scoped_student, same_college_student, foreign_student)
+        ]
+    )
+    department_admin, token = await create_admin_user(
+        db_session, role="department_admin"
+    )
+    department_admin.college_id = college.id
+    department_admin.department_id = department.id
+    await db_session.commit()
+
+    headers = {"Authorization": f"Bearer {token}"}
+    verifications = await client.get("/api/v1/admin/verifications", headers=headers)
+    internships = await client.get("/api/v1/admin/internships", headers=headers)
+    analytics = await client.get("/api/v1/admin/analytics/summary", headers=headers)
+
+    assert verifications.status_code == 200
+    assert verifications.json()["total"] == 1
+    assert verifications.json()["items"][0]["user_name"] == "Mechanical Student"
+    assert internships.status_code == 200
+    assert internships.json()["total"] == 1
+    assert internships.json()["items"][0]["student_name"] == "Mechanical Student"
+    assert analytics.status_code == 200
+    assert analytics.json()["total_users"] == 1
+    assert analytics.json()["total_internships"] == 1
+
+
+@pytest.mark.asyncio
+async def test_college_admin_scope_is_authoritative(db_session: AsyncSession):
+    """College admins only see and create department admins in their college."""
+    college_one = College(
+        name="GHRCE MN", city="Nagpur", state="Maharashtra", country="India", code="GH"
+    )
+    college_two = College(
+        name="Other College", city="Pune", state="Maharashtra", country="India", code="OC"
+    )
+    db_session.add_all([college_one, college_two])
+    await db_session.flush()
+
+    department_one = Department(
+        college_id=college_one.id, name="Computer Engineering", code="CSE"
+    )
+    department_two = Department(
+        college_id=college_two.id, name="Computer Engineering", code="CSE"
+    )
+    db_session.add_all([department_one, department_two])
+    await db_session.flush()
+
+    college_admin, _ = await create_admin_user(db_session, role="college_admin")
+    college_admin.college_id = college_one.id
+    db_session.add_all(
+        [
+            User(
+                email="ghrce-dept@example.com",
+                name="GHRCE Department Admin",
+                registration_number="ADMIN-GH",
+                mobile_number="9000000001",
+                password_hash="hashed_pw",
+                role="department_admin",
+                college_id=college_one.id,
+                department_id=department_one.id,
+            ),
+            User(
+                email="other-dept@example.com",
+                name="Other Department Admin",
+                registration_number="ADMIN-OC",
+                mobile_number="9000000002",
+                password_hash="hashed_pw",
+                role="department_admin",
+                college_id=college_two.id,
+                department_id=department_two.id,
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    result = await SuperAdminService.list_admins(
+        db_session, None, None, None, 1, 20, college_admin
+    )
+    assert result["total"] == 1
+    assert result["items"][0].email == "ghrce-dept@example.com"
+    assert result["items"][0].department_id == department_one.id
+    assert result["items"][0].department_name == "Computer Engineering"
+
+    created = await SuperAdminService.create_admin(
+        db_session,
+        AdminUserCreate(
+            name="New GHRCE Admin",
+            email="new-ghrce@example.com",
+            password="password123",
+            role="department_admin",
+            # Deliberately omit college_id: the service must derive it from the actor.
+            department_id=department_one.id,
+        ),
+        college_admin,
+    )
+    assert created.college_id == college_one.id
+    assert created.department_id == department_one.id
+
+
+@pytest.mark.asyncio
 async def test_admin_college_crud_and_roster_upload(client: AsyncClient, db_session: AsyncSession):
     """Test college creation, update, and student roster CSV upload."""
     _, admin_token = await create_admin_user(db_session)
@@ -357,7 +666,7 @@ async def test_admin_internship_management_and_force_verify(client: AsyncClient,
         "company_name": "Tesla Motors",
         "role": "Autopilot Intern",
         "department": "AI Vision",
-        "internship_type": "on_site",
+        "internship_type": INTERNSHIP_TYPES[0],  # on_site
         "location": "Palo Alto HQ",
         "stipend": "$50/hr",
     }
@@ -418,8 +727,26 @@ async def test_admin_internship_management_and_force_verify(client: AsyncClient,
 
 
 @pytest.mark.asyncio
+async def test_admin_attendance_endpoints(client: AsyncClient, db_session: AsyncSession):
+    _, admin_token = await create_admin_user(db_session)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    records = await client.get("/api/v1/admin/attendance", headers=headers)
+    assert records.status_code == 200
+    assert records.json()["total"] == 0
+    assert records.json()["items"] == []
+
+    analytics = await client.get(
+        "/api/v1/admin/attendance/analytics?period=month",
+        headers=headers,
+    )
+    assert analytics.status_code == 200
+    assert analytics.json()["average_attendance_rate"] == 0
+
+
+@pytest.mark.asyncio
 async def test_admin_get_card_image_fallback(client: AsyncClient, db_session: AsyncSession):
-    """Test admin fetching card image returns valid SVG badge even if disk scan is unavailable."""
+    """Test admin card image fallback when no uploaded image is available."""
     _, admin_token = await create_admin_user(db_session, role="college_admin")
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
@@ -430,11 +757,13 @@ async def test_admin_get_card_image_fallback(client: AsyncClient, db_session: As
         "mobile_number": "9811122233",
         "password": "StrongPassword@123",
     }
-    reg = await register_user(client, user_data=student_data)
-    student_id = reg["user"]["id"]
+    registration = await register_user(client, user_data=student_data)
+    student_id = registration["user"]["id"]
 
-    resp = await client.get(f"/api/v1/admin/verifications/{student_id}/card-image", headers=admin_headers)
-    assert resp.status_code == 200
-    assert "svg" in resp.headers.get("content-type", "")
-    assert b"<svg" in resp.content
-
+    response = await client.get(
+        f"/api/v1/admin/verifications/{student_id}/card-image",
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    assert "svg" in response.headers.get("content-type", "")
+    assert b"<svg" in response.content

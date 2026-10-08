@@ -9,6 +9,7 @@ from PIL import Image, ImageDraw
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.college import College
+from app.models.department import Department
 from tests.conftest import register_user
 
 
@@ -44,6 +45,15 @@ async def test_verification_workflow(client: AsyncClient, db_session: AsyncSessi
     db_session.add(college)
     await db_session.commit()
     await db_session.refresh(college)
+    department = Department(
+        college_id=college.id,
+        name="Computer Science",
+        code="CSE",
+        is_active=True,
+    )
+    db_session.add(department)
+    await db_session.commit()
+    await db_session.refresh(department)
 
     # 1. Check initial status
     resp_init = await client.get("/api/v1/verification/status", headers=headers)
@@ -62,10 +72,20 @@ async def test_verification_workflow(client: AsyncClient, db_session: AsyncSessi
     assert resp_select.status_code == 200
     assert resp_select.json()["step_status"] == "selected"
 
-    # Status check should show current_step is now college_id
+    # Status check should require department selection next
     resp_after_select = await client.get("/api/v1/verification/status", headers=headers)
-    assert resp_after_select.json()["current_step"] == "college_id"
+    assert resp_after_select.json()["current_step"] == "department_selection"
     assert resp_after_select.json()["college_verified"] is True
+
+    resp_department = await client.post(
+        "/api/v1/verification/department",
+        json={"department_id": str(department.id)},
+        headers=headers,
+    )
+    assert resp_department.status_code == 200
+
+    resp_after_department = await client.get("/api/v1/verification/status", headers=headers)
+    assert resp_after_department.json()["current_step"] == "college_id"
 
     # 3. Step 2: Upload College ID Card
     id_card_bytes = create_dummy_id_card()
