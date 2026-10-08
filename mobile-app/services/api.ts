@@ -185,6 +185,7 @@ export interface InternshipCreatePayload {
 }
 
 export interface AttendanceCheckInPayload {
+  work_mode?: 'offline' | 'online';
   latitude?: number;
   longitude?: number;
   face_image_base64?: string;
@@ -201,6 +202,14 @@ export interface AttendanceCheckInResult {
   location_verified: boolean;
   face_verified: boolean;
   tasks_scheduled: number;
+}
+
+export interface AttendanceFaceVerifyResult {
+  verified: boolean;
+  match_score: number;
+  message: string;
+  student_name: string;
+  enrolled: boolean;
 }
 
 export interface AttendanceRecordItem {
@@ -849,6 +858,18 @@ class ApiService {
   // -------------------------------------------------------------------------
   // Attendance & Shift Task Endpoints
   // -------------------------------------------------------------------------
+
+  async verifyAttendanceFace(face_image_base64: string): Promise<AttendanceFaceVerifyResult> {
+    return this.request<AttendanceFaceVerifyResult>(
+      '/api/v1/attendance/verify-face',
+      {
+        method: 'POST',
+        body: JSON.stringify({ face_image_base64 }),
+      },
+      true,
+      25000
+    );
+  }
 
   async checkIn(payload: AttendanceCheckInPayload): Promise<AttendanceCheckInResult> {
     return this.request<AttendanceCheckInResult>(

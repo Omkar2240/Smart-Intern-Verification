@@ -361,12 +361,12 @@ export default function VerificationHubScreen() {
         </View>
 
         {/* Security Notice */}
-        <View style={styles.securityNotice}>
+        {/* <View style={styles.securityNotice}>
           <Feather name="lock" size={16} color="#6B7280" />
           <Text style={styles.securityNoticeText}>
             Biometric embeddings are encrypted mathematically. Raw face images are never stored permanently.
           </Text>
-        </View>
+        </View> */}
 
         {/* Action Button */}
         <TouchableOpacity

@@ -7,6 +7,18 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 
+class AttendanceFaceVerifyRequest(BaseModel):
+    face_image_base64: str
+
+
+class AttendanceFaceVerifyResponse(BaseModel):
+    verified: bool
+    match_score: float
+    message: str
+    student_name: str
+    enrolled: bool = True
+
+
 class AttendanceCheckInRequest(BaseModel):
     work_mode: str = "offline"  # "offline" | "online"
     latitude: float | None = None

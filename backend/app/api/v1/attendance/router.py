@@ -13,6 +13,8 @@ from app.models.user import User
 from app.schemas.attendance import (
     AttendanceCheckInRequest,
     AttendanceCheckInResponse,
+    AttendanceFaceVerifyRequest,
+    AttendanceFaceVerifyResponse,
     AttendanceHistoryResponse,
     ShiftTaskActiveResponse,
     ShiftTaskSubmitRequest,
@@ -23,6 +25,7 @@ from app.services.attendance_service import (
     get_active_shift_task,
     submit_shift_task,
     mark_attendance as persist_attendance,
+    verify_student_face,
 )
 from uuid import UUID
 
@@ -40,6 +43,31 @@ class AttendanceResponse(BaseModel):
     message: str
     user_id: str
     timestamp: str
+
+
+@router.post("/verify-face", response_model=AttendanceFaceVerifyResponse, status_code=status.HTTP_200_OK)
+async def verify_face(
+    body: AttendanceFaceVerifyRequest,
+    current_user: Annotated[User, Depends(require_identity_verified)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    Real-time Biometric Face Verification for Offline Attendance.
+    Verifies the captured selfie against the authenticated student's enrolled face embedding.
+    Ensures proxy / other people's faces cannot be used for offline check-in.
+    """
+    verified, score, message = await verify_student_face(
+        db,
+        student=current_user,
+        face_image_base64=body.face_image_base64,
+    )
+    return AttendanceFaceVerifyResponse(
+        verified=verified,
+        match_score=score,
+        message=message,
+        student_name=current_user.name,
+        enrolled=True,
+    )
 
 
 @router.post("/check-in", response_model=AttendanceCheckInResponse, status_code=status.HTTP_200_OK)

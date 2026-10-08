@@ -71,6 +71,64 @@ def validate_shift_time(internship: Internship, current_dt: datetime) -> tuple[b
         return True, f"Shift validation bypassed: {e}"
 
 
+async def verify_student_face(
+    db: AsyncSession,
+    *,
+    student: User,
+    face_image_base64: str,
+) -> tuple[bool, float, str]:
+    """
+    Verify captured live selfie against the student's enrolled ArcFace biometric embedding.
+    Ensures that only the authentic enrolled student can check in, blocking proxy / other people's faces.
+    Returns (is_match, similarity_score, message).
+    """
+    if not face_image_base64 or not face_image_base64.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Biometric face verification is required for offline check-in. Please capture a live selfie.",
+        )
+
+    clean_b64 = face_image_base64.split(",")[-1].strip()
+    try:
+        face_bytes = base64.b64decode(clean_b64)
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid base64 encoding for captured selfie image.",
+        )
+
+    # Fetch active enrolled embedding
+    emb_stmt = select(FaceEmbedding).where(
+        FaceEmbedding.user_id == student.id,
+        FaceEmbedding.is_active.is_(True),
+    )
+    enrolled_emb = (await db.execute(emb_stmt)).scalar_one_or_none()
+    if not enrolled_emb:
+        raise HTTPException(
+            status_code=400,
+            detail="No enrolled face biometric profile found for your account. You must complete face enrollment during onboarding before checking in offline.",
+        )
+
+    try:
+        is_match, score = face_service.verify_against_stored(
+            face_bytes, enrolled_emb.embedding, threshold=0.65
+        )
+    except Exception as fe:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Biometric face processing failed: {str(fe)}",
+        )
+
+    if is_match:
+        return True, score, f"Identity verified! Face matches registered student ({student.name})."
+    else:
+        return (
+            False,
+            score,
+            f"Biometric mismatch detected (similarity score: {score:.2f}). The presented face does not match enrolled student '{student.name}'. Attendance check-in using another person's face is prohibited. Please verify with your own registered face.",
+        )
+
+
 async def check_in_student(
     db: AsyncSession,
     *,
@@ -80,7 +138,7 @@ async def check_in_student(
     """
     Main check-in pipeline:
     1. Validate active approved internship & shift hours
-    2. Offline flow: Geofence location check + ArcFace biometric verification + schedule 2 random 10-min tasks
+    2. Offline flow: Geofence location check + strict ArcFace biometric verification + schedule 2 random 10-min tasks
     3. Online flow: Digital task proof validation (no camera/location needed)
     4. Persist AttendanceRecord and return
     """
@@ -124,34 +182,22 @@ async def check_in_student(
             # Tolerant 500m geofence radius (or verified default if no coords stored in mock)
             location_verified = True
 
-        # Biometric ArcFace check
-        if request.face_image_base64:
-            clean_b64 = request.face_image_base64.split(",")[-1]
-            try:
-                face_bytes = base64.b64decode(clean_b64)
-                # Fetch student's enrolled embedding
-                emb_stmt = select(FaceEmbedding).where(
-                    FaceEmbedding.user_id == student.id,
-                    FaceEmbedding.is_active.is_(True),
-                )
-                enrolled_emb = (await db.execute(emb_stmt)).scalar_one_or_none()
-                if enrolled_emb:
-                    is_match, score = face_service.verify_against_stored(
-                        face_bytes, enrolled_emb.embedding, threshold=0.65
-                    )
-                    if is_match:
-                        face_verified = True
-                    else:
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"Face verification did not match your enrolled identity (match score: {score:.2f}). Please ensure good lighting and look straight at the camera.",
-                        )
-                else:
-                    face_verified = True  # Fallback if enrolled embedding is pending
-            except HTTPException:
-                raise
-            except Exception as fe:
-                raise HTTPException(status_code=400, detail=f"Biometric face processing failed: {str(fe)}")
+        # Biometric ArcFace check - strictly mandatory for offline check-in
+        if not request.face_image_base64 or not request.face_image_base64.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Biometric face verification is required for offline/on-site check-in. Please capture a live selfie to verify your identity.",
+            )
+
+        is_match, score, match_msg = await verify_student_face(
+            db, student=student, face_image_base64=request.face_image_base64
+        )
+        if not is_match:
+            raise HTTPException(
+                status_code=400,
+                detail=match_msg,
+            )
+        face_verified = True
 
     elif mode == "online":
         # Online flow: completely skips location and camera. Validates digital task proof

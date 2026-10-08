@@ -83,6 +83,13 @@ export default function HomeScreen() {
   const [offlineSelfieUri, setOfflineSelfieUri] = useState<string | null>(null);
   const [offlineSelfieBase64, setOfflineSelfieBase64] = useState<string | null>(null);
   const [checkInSubmitting, setCheckInSubmitting] = useState(false);
+  const [faceVerifying, setFaceVerifying] = useState(false);
+  const [faceVerifyResult, setFaceVerifyResult] = useState<{
+    verified: boolean;
+    match_score: number;
+    message: string;
+    student_name?: string;
+  } | null>(null);
 
   // Real-time clock updater
   useEffect(() => {
@@ -351,12 +358,16 @@ export default function HomeScreen() {
         // Today is an Office / Offline day in the Hybrid schedule
         setOfflineSelfieUri(null);
         setOfflineSelfieBase64(null);
+        setFaceVerifyResult(null);
+        setFaceVerifying(false);
         setShowOfflineModal(true);
       }
     } else {
       // OFFLINE / ON-SITE: Location and Face Verification
       setOfflineSelfieUri(null);
       setOfflineSelfieBase64(null);
+      setFaceVerifyResult(null);
+      setFaceVerifying(false);
       setShowOfflineModal(true);
     }
   };
@@ -416,6 +427,32 @@ export default function HomeScreen() {
     }
   };
 
+  // Run instant biometric comparison against enrolled student face embedding
+  const runFaceVerification = async (base64Data: string) => {
+    try {
+      setFaceVerifying(true);
+      setFaceVerifyResult(null);
+      const res = await api.verifyAttendanceFace(base64Data);
+      setFaceVerifyResult(res);
+      if (!res.verified) {
+        Alert.alert(
+          '❌ Biometric Mismatch Detected',
+          res.message || "The captured face does not match your enrolled student identity. Check-in is blocked until your own registered face is verified."
+        );
+      }
+    } catch (err: any) {
+      const msg = err.message || 'Face verification failed';
+      setFaceVerifyResult({
+        verified: false,
+        match_score: 0,
+        message: msg,
+      });
+      Alert.alert('Face Verification Error', msg);
+    } finally {
+      setFaceVerifying(false);
+    }
+  };
+
   // Capture Live Selfie for Offline Attendance
   const takeOfflineSelfie = async () => {
     try {
@@ -435,6 +472,9 @@ export default function HomeScreen() {
         const asset = res.assets[0];
         setOfflineSelfieUri(asset.uri);
         setOfflineSelfieBase64(asset.base64 || null);
+        if (asset.base64) {
+          runFaceVerification(asset.base64);
+        }
       }
     } catch (e: any) {
       Alert.alert('Camera Error', e.message || 'Failed to capture selfie.');
@@ -448,10 +488,21 @@ export default function HomeScreen() {
       return;
     }
 
+    if (!faceVerifyResult || !faceVerifyResult.verified) {
+      Alert.alert(
+        'Biometric Verification Required',
+        faceVerifyResult
+          ? "Identity mismatch detected: You cannot check in using another person's face. Please retake the selfie with your own registered face."
+          : 'Please wait for biometric face verification to complete.'
+      );
+      return;
+    }
+
     try {
       setCheckInSubmitting(true);
       // Coordinates default to Bangalore office / campus geofence
       const res = await api.checkIn({
+        work_mode: 'offline',
         latitude: 12.9716,
         longitude: 77.5946,
         face_image_base64: offlineSelfieBase64,
@@ -463,7 +514,7 @@ export default function HomeScreen() {
       setShowOfflineModal(false);
       Alert.alert(
         'Check-In Successful! 📍',
-        `Biometric & GPS geofence verified at ${internship?.company_name || 'Office'}.\nChecked in at ${timeStamp}.\n2 random 10-minute compliance verification tasks scheduled during your shift.`
+        `Biometric identity verified (${faceVerifyResult.student_name || user?.name || 'Student'}).\nChecked in at ${timeStamp}.\n2 random 10-minute compliance verification tasks scheduled during your shift.`
       );
       checkActiveTask();
     } catch (e: any) {
@@ -1222,10 +1273,46 @@ export default function HomeScreen() {
             {/* Selfie Preview or Camera Button */}
             <View style={{ alignItems: 'center', marginVertical: 14 }}>
               {offlineSelfieUri ? (
-                <View style={{ alignItems: 'center' }}>
-                  <Image source={{ uri: offlineSelfieUri }} style={styles.selfiePreviewImage} />
-                  <TouchableOpacity onPress={takeOfflineSelfie} style={{ marginTop: 8 }}>
-                    <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '600' }}>Retake Selfie</Text>
+                <View style={{ alignItems: 'center', width: '100%' }}>
+                  <View style={{ position: 'relative' }}>
+                    <Image source={{ uri: offlineSelfieUri }} style={styles.selfiePreviewImage} />
+                    {faceVerifying && (
+                      <View style={styles.selfieVerifyingOverlay}>
+                        <ActivityIndicator color="#F59E0B" size="small" />
+                        <Text style={styles.selfieVerifyingText}>Verifying Face...</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Verification Status Feedback Card */}
+                  {faceVerifyResult && !faceVerifying && (
+                    faceVerifyResult.verified ? (
+                      <View style={styles.faceMatchSuccessCard}>
+                        <Ionicons name="checkmark-circle" size={22} color="#059669" />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.faceMatchSuccessTitle}>Identity Confirmed</Text>
+                          <Text style={styles.faceMatchSuccessSubtitle}>
+                            Matches enrolled student: {faceVerifyResult.student_name || user?.name} • {(faceVerifyResult.match_score * 100).toFixed(0)}% match
+                          </Text>
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={styles.faceMismatchErrorCard}>
+                        <Ionicons name="alert-circle" size={24} color="#DC2626" />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.faceMismatchErrorTitle}>❌ Identity Mismatch Detected</Text>
+                          <Text style={styles.faceMismatchErrorSubtitle}>
+                            The captured face does not match enrolled student {faceVerifyResult.student_name || user?.name}. Another person's face is prohibited for attendance check-in.
+                          </Text>
+                        </View>
+                      </View>
+                    )
+                  )}
+
+                  <TouchableOpacity onPress={takeOfflineSelfie} style={{ marginTop: 10 }}>
+                    <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '700' }}>
+                      {faceVerifyResult?.verified ? 'Retake Photo' : 'Retake Selfie with Your Own Face'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               ) : (
@@ -1233,21 +1320,30 @@ export default function HomeScreen() {
                   <Ionicons name="camera-reverse" size={38} color="#F59E0B" />
                   <Text style={styles.selfiePromptText}>Take Quick Workplace Selfie</Text>
                   <Text style={styles.selfiePromptSubtext}>
-                    ArcFace biometric verification matches against enrolled college identity.
+                    ArcFace biometric verification strictly compares with your enrolled college face profile.
                   </Text>
                 </TouchableOpacity>
               )}
             </View>
 
             <TouchableOpacity
-              style={[styles.submitCheckInBtn, checkInSubmitting && styles.btnDisabled]}
+              style={[
+                styles.submitCheckInBtn,
+                (checkInSubmitting || faceVerifying || !faceVerifyResult?.verified) && styles.btnDisabled,
+              ]}
               onPress={handleOfflineCheckInSubmit}
-              disabled={checkInSubmitting}
+              disabled={checkInSubmitting || faceVerifying || !faceVerifyResult?.verified}
             >
               {checkInSubmitting ? (
                 <ActivityIndicator color="#111827" />
+              ) : faceVerifying ? (
+                <Text style={styles.submitCheckInBtnText}>Verifying Face Biometrics...</Text>
+              ) : !offlineSelfieUri ? (
+                <Text style={styles.submitCheckInBtnText}>Take Selfie to Verify Face</Text>
+              ) : faceVerifyResult?.verified ? (
+                <Text style={styles.submitCheckInBtnText}>Confirm On-Site Check-In</Text>
               ) : (
-                <Text style={styles.submitCheckInBtnText}>Verify Biometrics & Check In</Text>
+                <Text style={styles.submitCheckInBtnText}>Check-In Blocked (Mismatch Detected)</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -2165,6 +2261,71 @@ const styles = StyleSheet.create({
     borderRadius: 75,
     borderWidth: 3,
     borderColor: '#F59E0B',
+  },
+  selfieVerifyingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderRadius: 75,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 10,
+  },
+  selfieVerifyingText: {
+    color: '#F8FAFC',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  faceMatchSuccessCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 12,
+    width: '100%',
+  },
+  faceMatchSuccessTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#065F46',
+  },
+  faceMatchSuccessSubtitle: {
+    fontSize: 11,
+    color: '#047857',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  faceMismatchErrorCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 12,
+    width: '100%',
+  },
+  faceMismatchErrorTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#991B1B',
+  },
+  faceMismatchErrorSubtitle: {
+    fontSize: 11,
+    color: '#B91C1C',
+    marginTop: 2,
+    lineHeight: 16,
   },
 
   taskModalCard: {
