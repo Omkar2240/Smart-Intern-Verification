@@ -22,6 +22,9 @@ class InternshipBase(BaseModel):
     end_date: str | None = None
     stipend: str | None = None
     offer_letter_url: str | None = None
+    shift_start_time: str | None = None  # e.g. "09:00"
+    shift_end_time: str | None = None    # e.g. "17:00"
+    actual_hours_per_day: float | None = 8.0
 
 
 class InternshipCreate(InternshipBase):
@@ -41,6 +44,9 @@ class InternshipUpdate(BaseModel):
     end_date: str | None = None
     stipend: str | None = None
     offer_letter_url: str | None = None
+    shift_start_time: str | None = None
+    shift_end_time: str | None = None
+    actual_hours_per_day: float | None = None
     is_active: bool | None = None
 
 

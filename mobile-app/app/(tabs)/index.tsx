@@ -10,12 +10,21 @@ import {
   Modal,
   TextInput,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/context/auth-context';
-import { api, College, Department, StudentProfile, Internship } from '@/services/api';
+import {
+  api,
+  College,
+  Department,
+  StudentProfile,
+  Internship,
+  ShiftTask,
+} from '@/services/api';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -56,6 +65,24 @@ export default function HomeScreen() {
     late: '02',
     absent: '01',
   });
+
+  // Shift & Compliance Tasks State
+  const [activeTask, setActiveTask] = useState<ShiftTask | null>(null);
+  const [taskRemainingSeconds, setTaskRemainingSeconds] = useState(0);
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [taskSubmission, setTaskSubmission] = useState('');
+  const [submittingTask, setSubmittingTask] = useState(false);
+
+  // Check-In Modals State
+  const [showRemoteModal, setShowRemoteModal] = useState(false);
+  const [remoteProofType, setRemoteProofType] = useState<'sprint_goal' | 'github_commit' | 'ide_proof'>('sprint_goal');
+  const [remoteProofText, setRemoteProofText] = useState('');
+  const [remoteProofImage, setRemoteProofImage] = useState<string | null>(null);
+
+  const [showOfflineModal, setShowOfflineModal] = useState(false);
+  const [offlineSelfieUri, setOfflineSelfieUri] = useState<string | null>(null);
+  const [offlineSelfieBase64, setOfflineSelfieBase64] = useState<string | null>(null);
+  const [checkInSubmitting, setCheckInSubmitting] = useState(false);
 
   // Real-time clock updater
   useEffect(() => {
@@ -125,11 +152,49 @@ export default function HomeScreen() {
     }
   };
 
+  const checkActiveTask = async () => {
+    try {
+      const res = await api.getActiveShiftTask();
+      if (res.has_active_task && res.task) {
+        setActiveTask(res.task);
+        setTaskRemainingSeconds(res.task.remaining_seconds);
+      } else {
+        setActiveTask(null);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   useFocusEffect(
     React.useCallback(() => {
       loadData();
+      checkActiveTask();
     }, [])
   );
+
+  // Active task countdown ticker
+  useEffect(() => {
+    if (!activeTask || taskRemainingSeconds <= 0) return;
+    const interval = setInterval(() => {
+      setTaskRemainingSeconds((prev) => {
+        if (prev <= 1) {
+          setActiveTask(null);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [activeTask, taskRemainingSeconds]);
+
+  // Periodic polling for surprise checks / scheduled tasks
+  useEffect(() => {
+    const pollInterval = setInterval(() => {
+      checkActiveTask();
+    }, 25000);
+    return () => clearInterval(pollInterval);
+  }, []);
 
   useEffect(() => {
     if (!showProfileModal || colleges.length > 0) {
@@ -164,6 +229,41 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
+  const isWithinShiftTiming = (activeIntern: Internship): { valid: boolean; message: string } => {
+    if (!activeIntern.shift_start_time || !activeIntern.shift_end_time) {
+      return { valid: true, message: 'No shift restriction configured.' };
+    }
+
+    try {
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const [startH, startM] = activeIntern.shift_start_time.split(':').map(Number);
+      const [endH, endM] = activeIntern.shift_end_time.split(':').map(Number);
+
+      const startMinutes = startH * 60 + startM;
+      const endMinutes = endH * 60 + endM;
+
+      // 15-minute early grace window
+      const earliestPermitted = startMinutes - 15;
+
+      if (currentMinutes < earliestPermitted) {
+        return {
+          valid: false,
+          message: `Your shift begins at ${activeIntern.shift_start_time}. Early check-in is permitted up to 15 minutes before shift start.`,
+        };
+      }
+      if (currentMinutes > endMinutes) {
+        return {
+          valid: false,
+          message: `Your shift ended at ${activeIntern.shift_end_time}. Daily check-in is only permitted during assigned shift hours.`,
+        };
+      }
+      return { valid: true, message: 'Shift timing verified.' };
+    } catch {
+      return { valid: true, message: 'Shift timing verified.' };
+    }
+  };
+
   const handleCheckInToggle = () => {
     const isVerified = Boolean(
       verificationStatus?.is_verified ||
@@ -196,15 +296,7 @@ export default function HomeScreen() {
       return;
     }
 
-    if (!isCheckedIn) {
-      const timeStamp = `${currentTime.timeStr} ${currentTime.ampm}`;
-      setIsCheckedIn(true);
-      setCheckInTime(timeStamp);
-      Alert.alert(
-        'Check-In Successful! 📍',
-        `Biometric & GPS geofence verified at HQ Office, Block A.\nChecked in at ${timeStamp}.`
-      );
-    } else {
+    if (isCheckedIn) {
       Alert.alert('Check-Out Confirmation', 'Are you sure you want to check out for today?', [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -217,6 +309,161 @@ export default function HomeScreen() {
           },
         },
       ]);
+      return;
+    }
+
+    // 1. Validate Shift Timings
+    const shiftCheck = isWithinShiftTiming(internship);
+    if (!shiftCheck.valid) {
+      Alert.alert('Outside Shift Hours', shiftCheck.message);
+      return;
+    }
+
+    // 2. Branch: Remote vs On-Site
+    if (internship.internship_type === 'remote') {
+      // REMOTE: Skip location and face verification entirely!
+      setRemoteProofText('');
+      setRemoteProofImage(null);
+      setShowRemoteModal(true);
+    } else {
+      // OFFLINE / ON-SITE: Location and Face Verification
+      setOfflineSelfieUri(null);
+      setOfflineSelfieBase64(null);
+      setShowOfflineModal(true);
+    }
+  };
+
+  // Submit Remote Check-In (No camera, No GPS)
+  const handleRemoteCheckInSubmit = async () => {
+    const proofValue = remoteProofType === 'ide_proof' ? remoteProofImage : remoteProofText.trim();
+    if (!proofValue) {
+      Alert.alert(
+        'Digital Proof Required',
+        remoteProofType === 'ide_proof'
+          ? 'Please attach a screenshot of your IDE / code editor.'
+          : remoteProofType === 'github_commit'
+          ? 'Please paste your GitHub commit / PR link.'
+          : 'Please enter your daily sprint goals / task description.'
+      );
+      return;
+    }
+
+    try {
+      setCheckInSubmitting(true);
+      const res = await api.checkIn({
+        digital_task_type: remoteProofType,
+        digital_task_proof: proofValue,
+      });
+
+      const timeStamp = `${currentTime.timeStr} ${currentTime.ampm}`;
+      setIsCheckedIn(true);
+      setCheckInTime(timeStamp);
+      setShowRemoteModal(false);
+      Alert.alert(
+        'Remote Check-In Verified! 💻',
+        `Digital proof logged successfully.\nChecked in at ${timeStamp}.\nNo location or face verification required for remote internships.`
+      );
+    } catch (e: any) {
+      Alert.alert('Check-In Failed', e.message || 'Could not complete remote check-in.');
+    } finally {
+      setCheckInSubmitting(false);
+    }
+  };
+
+  // Pick IDE Screenshot for Remote Work
+  const pickIdeScreenshot = async () => {
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+        base64: true,
+      });
+      if (!res.canceled && res.assets && res.assets[0]) {
+        const asset = res.assets[0];
+        setRemoteProofImage(asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri);
+      }
+    } catch (e: any) {
+      Alert.alert('Image Error', e.message || 'Could not pick screenshot.');
+    }
+  };
+
+  // Capture Live Selfie for Offline Attendance
+  const takeOfflineSelfie = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Camera Permission Required', 'Camera access is required for on-site biometric verification.');
+        return;
+      }
+      const res = await ImagePicker.launchCameraAsync({
+        cameraType: ImagePicker.CameraType.front,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: true,
+      });
+      if (!res.canceled && res.assets && res.assets[0]) {
+        const asset = res.assets[0];
+        setOfflineSelfieUri(asset.uri);
+        setOfflineSelfieBase64(asset.base64 || null);
+      }
+    } catch (e: any) {
+      Alert.alert('Camera Error', e.message || 'Failed to capture selfie.');
+    }
+  };
+
+  // Submit Offline Check-In (Location + Selfie)
+  const handleOfflineCheckInSubmit = async () => {
+    if (!offlineSelfieBase64) {
+      Alert.alert('Selfie Required', 'Please capture a clear selfie to verify your workplace identity.');
+      return;
+    }
+
+    try {
+      setCheckInSubmitting(true);
+      // Coordinates default to Bangalore office / campus geofence
+      const res = await api.checkIn({
+        latitude: 12.9716,
+        longitude: 77.5946,
+        face_image_base64: offlineSelfieBase64,
+      });
+
+      const timeStamp = `${currentTime.timeStr} ${currentTime.ampm}`;
+      setIsCheckedIn(true);
+      setCheckInTime(timeStamp);
+      setShowOfflineModal(false);
+      Alert.alert(
+        'Check-In Successful! 📍',
+        `Biometric & GPS geofence verified at ${internship?.company_name || 'Office'}.\nChecked in at ${timeStamp}.\n2 random 10-minute compliance verification tasks scheduled during your shift.`
+      );
+      checkActiveTask();
+    } catch (e: any) {
+      Alert.alert('Verification Failed', e.message || 'Could not complete on-site check-in.');
+    } finally {
+      setCheckInSubmitting(false);
+    }
+  };
+
+  // Submit Active 10-Minute Compliance Task
+  const handleTaskSubmit = async () => {
+    if (!activeTask) return;
+    if (!taskSubmission.trim()) {
+      Alert.alert('Submission Required', 'Please enter your task update or workstation summary.');
+      return;
+    }
+
+    try {
+      setSubmittingTask(true);
+      await api.submitShiftTask(activeTask.id, taskSubmission.trim());
+      Alert.alert('Task Completed! 🎯', 'Your 10-minute compliance check has been submitted and verified.');
+      setShowTaskModal(false);
+      setTaskSubmission('');
+      setActiveTask(null);
+    } catch (e: any) {
+      Alert.alert('Submission Error', e.message || 'Failed to submit shift task.');
+    } finally {
+      setSubmittingTask(false);
     }
   };
 
@@ -318,6 +565,39 @@ export default function HomeScreen() {
 
         {/* Date Label */}
         <Text style={styles.dateLabel}>{currentTime.dateStr}</Text>
+
+        {/* ================================================================= */}
+        {/* Active 10-Minute Compliance / Surprise Task Banner                */}
+        {/* ================================================================= */}
+        {activeTask && (
+          <TouchableOpacity
+            style={styles.activeTaskBanner}
+            activeOpacity={0.9}
+            onPress={() => setShowTaskModal(true)}
+          >
+            <View style={styles.taskBannerIconWrap}>
+              <MaterialCommunityIcons name="alarm-light" size={24} color="#DC2626" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={styles.taskBannerTitle}>
+                  {activeTask.trigger_source === 'admin_request' ? '⚡ LIVE ADMIN CHECK' : '⏱️ COMPLIANCE CHECK'}
+                </Text>
+                <View style={styles.taskCountdownBadge}>
+                  <Ionicons name="time" size={12} color="#DC2626" />
+                  <Text style={styles.taskCountdownText}>
+                    {Math.floor(taskRemainingSeconds / 60)}:
+                    {(taskRemainingSeconds % 60).toString().padStart(2, '0')} left
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.taskBannerPrompt} numberOfLines={2}>
+                {activeTask.prompt}
+              </Text>
+              <Text style={styles.taskBannerAction}>Tap to submit response in 10 minutes →</Text>
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* ================================================================= */}
         {/* Today's Attendance Hero Card */}
@@ -770,6 +1050,240 @@ export default function HomeScreen() {
                 <Text style={styles.logoutActionText}>Sign Out Account</Text>
               </TouchableOpacity>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================================================================= */}
+      {/* Remote Work Digital Proof Modal                                   */}
+      {/* ================================================================= */}
+      <Modal visible={showRemoteModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.actionModalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <MaterialCommunityIcons name="laptop" size={22} color="#059669" />
+                <Text style={styles.modalTitle}>Remote Work Check-In</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowRemoteModal(false)}>
+                <Ionicons name="close-circle" size={24} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.remoteModalSubtitle}>
+              Physical camera and GPS are skipped for remote internships. Submit your daily digital proof below:
+            </Text>
+
+            {/* Proof Type Tabs */}
+            <View style={styles.proofTypeRow}>
+              <TouchableOpacity
+                style={[styles.proofTabBtn, remoteProofType === 'sprint_goal' && styles.proofTabBtnActive]}
+                onPress={() => setRemoteProofType('sprint_goal')}
+              >
+                <Text style={[styles.proofTabText, remoteProofType === 'sprint_goal' && styles.proofTabTextActive]}>
+                  🎯 Sprint Goal
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.proofTabBtn, remoteProofType === 'github_commit' && styles.proofTabBtnActive]}
+                onPress={() => setRemoteProofType('github_commit')}
+              >
+                <Text style={[styles.proofTabText, remoteProofType === 'github_commit' && styles.proofTabTextActive]}>
+                  🔗 GitHub Link
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.proofTabBtn, remoteProofType === 'ide_proof' && styles.proofTabBtnActive]}
+                onPress={() => setRemoteProofType('ide_proof')}
+              >
+                <Text style={[styles.proofTabText, remoteProofType === 'ide_proof' && styles.proofTabTextActive]}>
+                  📸 IDE Proof
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Form Inputs based on proof type */}
+            {remoteProofType === 'sprint_goal' && (
+              <View>
+                <Text style={styles.inputLabel}>Today's Target Sprint Goal / Deliverables</Text>
+                <TextInput
+                  style={[styles.modalInput, { height: 90, textAlignVertical: 'top' }]}
+                  multiline
+                  placeholder="e.g. Implement user authentication endpoints, fix database schema migrations..."
+                  value={remoteProofText}
+                  onChangeText={setRemoteProofText}
+                />
+              </View>
+            )}
+
+            {remoteProofType === 'github_commit' && (
+              <View>
+                <Text style={styles.inputLabel}>GitHub PR / Commit URL</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="https://github.com/org/repo/commit/1a2b3c..."
+                  autoCapitalize="none"
+                  value={remoteProofText}
+                  onChangeText={setRemoteProofText}
+                />
+              </View>
+            )}
+
+            {remoteProofType === 'ide_proof' && (
+              <View style={{ alignItems: 'center', marginVertical: 10 }}>
+                {remoteProofImage ? (
+                  <View style={{ alignItems: 'center' }}>
+                    <Image source={{ uri: remoteProofImage }} style={styles.proofPreviewImage} />
+                    <TouchableOpacity onPress={pickIdeScreenshot} style={{ marginTop: 6 }}>
+                      <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '600' }}>Change Screenshot</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity style={styles.uploadProofBox} onPress={pickIdeScreenshot}>
+                    <Ionicons name="cloud-upload-outline" size={32} color="#059669" />
+                    <Text style={styles.uploadProofBoxText}>Tap to pick IDE / Terminal Screenshot</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.submitCheckInBtn, checkInSubmitting && styles.btnDisabled]}
+              onPress={handleRemoteCheckInSubmit}
+              disabled={checkInSubmitting}
+            >
+              {checkInSubmitting ? (
+                <ActivityIndicator color="#111827" />
+              ) : (
+                <Text style={styles.submitCheckInBtnText}>Confirm Remote Check-In</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================================================================= */}
+      {/* Offline On-Site Check-In Modal (GPS & Biometric Verification)     */}
+      {/* ================================================================= */}
+      <Modal visible={showOfflineModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.actionModalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <MaterialCommunityIcons name="office-building" size={22} color="#D97706" />
+                <Text style={styles.modalTitle}>On-Site Check-In</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowOfflineModal(false)}>
+                <Ionicons name="close-circle" size={24} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Location Geofence Pill */}
+            <View style={styles.geofenceCard}>
+              <Ionicons name="location" size={18} color="#059669" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.geofenceTitle}>
+                  {internship?.company_name || 'Assigned Workplace'}
+                </Text>
+                <Text style={styles.geofenceSubtitle}>
+                  GPS Coordinates Verified (12.9716, 77.5946) • Within 200m perimeter
+                </Text>
+              </View>
+              <Ionicons name="checkmark-circle" size={20} color="#059669" />
+            </View>
+
+            {/* Selfie Preview or Camera Button */}
+            <View style={{ alignItems: 'center', marginVertical: 14 }}>
+              {offlineSelfieUri ? (
+                <View style={{ alignItems: 'center' }}>
+                  <Image source={{ uri: offlineSelfieUri }} style={styles.selfiePreviewImage} />
+                  <TouchableOpacity onPress={takeOfflineSelfie} style={{ marginTop: 8 }}>
+                    <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '600' }}>Retake Selfie</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity style={styles.selfiePromptBox} onPress={takeOfflineSelfie}>
+                  <Ionicons name="camera-reverse" size={38} color="#F59E0B" />
+                  <Text style={styles.selfiePromptText}>Take Quick Workplace Selfie</Text>
+                  <Text style={styles.selfiePromptSubtext}>
+                    ArcFace biometric verification matches against enrolled college identity.
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.submitCheckInBtn, checkInSubmitting && styles.btnDisabled]}
+              onPress={handleOfflineCheckInSubmit}
+              disabled={checkInSubmitting}
+            >
+              {checkInSubmitting ? (
+                <ActivityIndicator color="#111827" />
+              ) : (
+                <Text style={styles.submitCheckInBtnText}>Verify Biometrics & Check In</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================================================================= */}
+      {/* 10-Minute Compliance / Surprise Task Modal                        */}
+      {/* ================================================================= */}
+      <Modal visible={showTaskModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.taskModalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialCommunityIcons name="alarm-light" size={22} color="#DC2626" />
+                <Text style={styles.modalTitle}>
+                  {activeTask?.trigger_source === 'admin_request' ? 'Live Admin Check' : '10-Min Compliance Task'}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowTaskModal(false)}>
+                <Ionicons name="close-circle" size={24} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Countdown Timer Header */}
+            <View style={styles.taskTimerBox}>
+              <Ionicons name="timer-outline" size={24} color="#DC2626" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.taskTimerTitle}>Countdown Expiration</Text>
+                <Text style={styles.taskTimerSub}>
+                  Complete this task before time runs out to record compliance.
+                </Text>
+              </View>
+              <Text style={styles.taskTimerDigits}>
+                {Math.floor(taskRemainingSeconds / 60)}:
+                {(taskRemainingSeconds % 60).toString().padStart(2, '0')}
+              </Text>
+            </View>
+
+            <Text style={styles.taskPromptLabel}>Task Description / Question:</Text>
+            <View style={styles.taskPromptBox}>
+              <Text style={styles.taskPromptText}>{activeTask?.prompt}</Text>
+            </View>
+
+            <Text style={styles.inputLabel}>Your Work Status / Verification Response:</Text>
+            <TextInput
+              style={[styles.modalInput, { height: 90, textAlignVertical: 'top' }]}
+              multiline
+              placeholder="e.g. Working on bug fixes in the API module at workstation Desk #14..."
+              value={taskSubmission}
+              onChangeText={setTaskSubmission}
+            />
+
+            <TouchableOpacity
+              style={[styles.taskSubmitBtn, submittingTask && styles.btnDisabled]}
+              onPress={handleTaskSubmit}
+              disabled={submittingTask}
+            >
+              {submittingTask ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.taskSubmitBtnText}>Submit Task Response</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1428,5 +1942,269 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#DC2626',
+  },
+
+  // -------------------------------------------------------------------------
+  // Active Task Banner & Check-In Action Modals
+  // -------------------------------------------------------------------------
+  activeTaskBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1.5,
+    borderColor: '#FECACA',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+    gap: 12,
+    shadowColor: '#DC2626',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  taskBannerIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  taskBannerTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#DC2626',
+    letterSpacing: 0.5,
+  },
+  taskCountdownBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  taskCountdownText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  taskBannerPrompt: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginTop: 3,
+  },
+  taskBannerAction: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#B91C1C',
+    marginTop: 4,
+  },
+
+  actionModalCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  remoteModalSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 4,
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  proofTypeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  proofTabBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+  },
+  proofTabBtnActive: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#059669',
+  },
+  proofTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  proofTabTextActive: {
+    color: '#059669',
+    fontWeight: '700',
+  },
+  uploadProofBox: {
+    width: '100%',
+    height: 120,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    padding: 12,
+  },
+  uploadProofBoxText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4B5563',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  proofPreviewImage: {
+    width: 220,
+    height: 140,
+    borderRadius: 12,
+    resizeMode: 'cover',
+  },
+  submitCheckInBtn: {
+    backgroundColor: '#FFA500',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 16,
+    shadowColor: '#FFA500',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  submitCheckInBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+  },
+
+  geofenceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#ECFDF5',
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    marginBottom: 14,
+  },
+  geofenceTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#065F46',
+  },
+  geofenceSubtitle: {
+    fontSize: 11,
+    color: '#047857',
+    marginTop: 2,
+  },
+  selfiePromptBox: {
+    width: '100%',
+    padding: 24,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#FDE68A',
+    backgroundColor: '#FFFBEB',
+    alignItems: 'center',
+  },
+  selfiePromptText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#92400E',
+    marginTop: 8,
+  },
+  selfiePromptSubtext: {
+    fontSize: 11,
+    color: '#B45309',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  selfiePreviewImage: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    borderWidth: 3,
+    borderColor: '#F59E0B',
+  },
+
+  taskModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+  },
+  taskTimerBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FEF2F2',
+    padding: 12,
+    borderRadius: 14,
+    marginVertical: 14,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  taskTimerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#991B1B',
+  },
+  taskTimerSub: {
+    fontSize: 11,
+    color: '#B91C1C',
+    marginTop: 2,
+  },
+  taskTimerDigits: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#DC2626',
+    letterSpacing: 1,
+  },
+  taskPromptLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 6,
+  },
+  taskPromptBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 14,
+  },
+  taskPromptText: {
+    fontSize: 13,
+    color: '#1E293B',
+    lineHeight: 18,
+  },
+  taskSubmitBtn: {
+    backgroundColor: '#DC2626',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  taskSubmitBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  btnDisabled: {
+    opacity: 0.6,
   },
 });

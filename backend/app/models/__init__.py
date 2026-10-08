@@ -11,6 +11,7 @@ from app.models.internship import Internship
 from app.models.attendance_record import AttendanceRecord
 from app.models.department import Department
 from app.models.system_config import SystemConfig
+from app.models.shift_task import ShiftTask
 
 __all__ = [
     "User",
@@ -26,4 +27,5 @@ __all__ = [
     "AttendanceRecord",
     "Department",
     "SystemConfig",
+    "ShiftTask",
 ]

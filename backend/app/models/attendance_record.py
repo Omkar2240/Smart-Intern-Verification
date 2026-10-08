@@ -27,4 +27,21 @@ class AttendanceRecord(Base, UUIDMixin, TimestampMixin):
         String(20), nullable=False, default=ATTENDANCE_STATUSES[0]
     )
 
+    # Verification Mode and Proof Details
+    work_mode: Mapped[str] = mapped_column(String(20), default="offline", nullable=False)  # "offline" or "online"
+    location_verified: Mapped[bool] = mapped_column(default=False, nullable=False)
+    face_verified: Mapped[bool] = mapped_column(default=False, nullable=False)
+    check_in_lat: Mapped[float | None] = mapped_column(nullable=True)
+    check_in_lng: Mapped[float | None] = mapped_column(nullable=True)
+
+    # Digital / Remote Proof (Online Mode)
+    digital_task_type: Mapped[str | None] = mapped_column(String(50), nullable=True)  # "sprint_goal", "github_commit", "ide_screenshot"
+    digital_task_proof: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+
+    # Compliance Task Counters & Admin Flags
+    tasks_assigned_count: Mapped[int] = mapped_column(default=0, nullable=False)
+    tasks_completed_count: Mapped[int] = mapped_column(default=0, nullable=False)
+    admin_requested_check: Mapped[bool] = mapped_column(default=False, nullable=False)
+
     student = relationship("User")
+

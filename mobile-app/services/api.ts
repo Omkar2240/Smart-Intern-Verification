@@ -153,6 +153,9 @@ export interface Internship {
   end_date?: string | null;
   stipend?: string | null;
   offer_letter_url?: string | null;
+  shift_start_time?: string | null;
+  shift_end_time?: string | null;
+  actual_hours_per_day?: number | null;
   verification_stage: 'submitted' | 'tp_review' | 'mentor_review' | 'verified' | 'rejected';
   status: 'pending' | 'verified' | 'rejected';
   rejection_reason?: string | null;
@@ -174,6 +177,75 @@ export interface InternshipCreatePayload {
   end_date?: string;
   stipend?: string;
   offer_letter_url?: string;
+  shift_start_time?: string;
+  shift_end_time?: string;
+  actual_hours_per_day?: number;
+}
+
+export interface AttendanceCheckInPayload {
+  latitude?: number;
+  longitude?: number;
+  face_image_base64?: string;
+  digital_task_type?: 'sprint_goal' | 'github_commit' | 'ide_proof';
+  digital_task_proof?: string;
+}
+
+export interface AttendanceCheckInResult {
+  status: string;
+  message: string;
+  attendance_id: string;
+  work_mode: 'offline' | 'online';
+  check_in_time: string;
+  location_verified: boolean;
+  face_verified: boolean;
+  tasks_scheduled: number;
+}
+
+export interface AttendanceRecordItem {
+  id: string;
+  date: string;
+  check_in: string;
+  check_out?: string | null;
+  status: 'present' | 'absent' | 'late';
+  work_mode: 'offline' | 'online';
+  location_verified: boolean;
+  face_verified: boolean;
+  tasks_assigned_count: number;
+  tasks_completed_count: number;
+  admin_requested_check: boolean;
+}
+
+export interface AttendanceHistoryResult {
+  total_days: number;
+  present_days: number;
+  on_site_count: number;
+  remote_count: number;
+  attendance_rate: number;
+  records: AttendanceRecordItem[];
+}
+
+export interface ShiftTask {
+  id: string;
+  task_number: number;
+  task_type: string;
+  prompt: string;
+  scheduled_at: string;
+  expires_at: string;
+  remaining_seconds: number;
+  status: 'active' | 'completed' | 'expired';
+  trigger_source: 'automated_shift' | 'admin_request';
+}
+
+export interface ShiftTaskActiveResult {
+  has_active_task: boolean;
+  task: ShiftTask | null;
+}
+
+export interface ShiftTaskSubmitResult {
+  status: string;
+  message: string;
+  task_id: string;
+  task_status: string;
 }
 
 export function extractErrorMessage(errorData: any, fallback = 'Request failed'): string {
@@ -769,6 +841,50 @@ class ApiService {
       },
       true,
       60000
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Attendance & Shift Task Endpoints
+  // -------------------------------------------------------------------------
+
+  async checkIn(payload: AttendanceCheckInPayload): Promise<AttendanceCheckInResult> {
+    return this.request<AttendanceCheckInResult>(
+      '/api/v1/attendance/check-in',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+      true,
+      30000
+    );
+  }
+
+  async getAttendanceHistory(): Promise<AttendanceHistoryResult> {
+    return this.request<AttendanceHistoryResult>(
+      '/api/v1/attendance/history',
+      { method: 'GET' },
+      true
+    );
+  }
+
+  async getActiveShiftTask(): Promise<ShiftTaskActiveResult> {
+    return this.request<ShiftTaskActiveResult>(
+      '/api/v1/attendance/shift-tasks/active',
+      { method: 'GET' },
+      true
+    );
+  }
+
+  async submitShiftTask(taskId: string, submission: string): Promise<ShiftTaskSubmitResult> {
+    return this.request<ShiftTaskSubmitResult>(
+      `/api/v1/attendance/shift-tasks/${taskId}/submit`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ submission }),
+      },
+      true,
+      15000
     );
   }
 }

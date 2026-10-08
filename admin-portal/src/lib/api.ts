@@ -442,6 +442,27 @@ class ApiClient {
     return this.request<AttendanceAnalytics>(`/admin/attendance/analytics${qs}`);
   }
 
+  async requestAttendanceCheck(studentId: string, prompt?: string): Promise<{
+    status: string;
+    message: string;
+    task_id: string;
+    student_id: string;
+    scheduled_at: string;
+    expires_at: string;
+  }> {
+    return this.request<{
+      status: string;
+      message: string;
+      task_id: string;
+      student_id: string;
+      scheduled_at: string;
+      expires_at: string;
+    }>("/admin/attendance/request-check", {
+      method: "POST",
+      body: JSON.stringify({ student_id: studentId, prompt }),
+    });
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // AUDIT LOGS (super_admin / admin only)
   // ─────────────────────────────────────────────────────────────────────────

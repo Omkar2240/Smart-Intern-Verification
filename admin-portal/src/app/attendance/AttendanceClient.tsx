@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { Clock, Search, Users, TrendingUp, TrendingDown, Activity } from "lucide-react";
+import { Clock, Search, Users, TrendingUp, TrendingDown, Activity, Zap, CheckCircle, AlertTriangle, X } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { StatCard } from "@/components/StatCard";
@@ -31,6 +31,32 @@ export function AttendanceClient({ initialData, initialAnalytics }: Props) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("today");
   const [page, setPage] = useState(1);
+
+  // Request Live Check Modal State
+  const [selectedStudentForCheck, setSelectedStudentForCheck] = useState<{ id: string; name: string } | null>(null);
+  const [checkPrompt, setCheckPrompt] = useState("Urgent live attendance check requested by department administration.");
+  const [requestingCheck, setRequestingCheck] = useState(false);
+  const [checkSuccessMsg, setCheckSuccessMsg] = useState<string | null>(null);
+  const [checkErrorMsg, setCheckErrorMsg] = useState<string | null>(null);
+
+  const handleSendCheckRequest = async () => {
+    if (!selectedStudentForCheck) return;
+    setRequestingCheck(true);
+    setCheckSuccessMsg(null);
+    setCheckErrorMsg(null);
+    try {
+      const res = await api.requestAttendanceCheck(selectedStudentForCheck.id, checkPrompt.trim());
+      setCheckSuccessMsg(`Live 10-minute attendance check sent to ${selectedStudentForCheck.name}! Expiry: 10 mins.`);
+      setTimeout(() => {
+        setSelectedStudentForCheck(null);
+        setCheckSuccessMsg(null);
+      }, 2500);
+    } catch (err: any) {
+      setCheckErrorMsg(err.message || "Failed to trigger live attendance check.");
+    } finally {
+      setRequestingCheck(false);
+    }
+  };
 
   const debouncedSearch = useDebounce(search, 350);
 
@@ -156,7 +182,7 @@ export function AttendanceClient({ initialData, initialAnalytics }: Props) {
               <table className="w-full text-xs">
                 <thead className="bg-slate-50/80 border-b border-slate-200">
                   <tr>
-                    {["Student", "Department", "Date", "Check In", "Check Out", "Status", "Rate"].map((col) => (
+                    {["Student", "Department", "Date", "Check In", "Check Out", "Status", "Rate", "Action"].map((col) => (
                       <th key={col} className="py-3 px-4 text-left font-mono text-[10px] text-slate-500 uppercase tracking-wider font-bold whitespace-nowrap">{col}</th>
                     ))}
                   </tr>
@@ -184,6 +210,20 @@ export function AttendanceClient({ initialData, initialAnalytics }: Props) {
                             <span className="font-mono text-[10px] font-bold text-slate-700">{record.attendance_rate}%</span>
                           ) : "—"}
                         </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <button
+                            onClick={() => {
+                              setSelectedStudentForCheck({ id: record.student_id, name: record.student_name });
+                              setCheckPrompt("Urgent live attendance check requested by department administration.");
+                              setCheckSuccessMsg(null);
+                              setCheckErrorMsg(null);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Zap className="w-3 h-3 text-amber-600" />
+                            Live Check
+                          </button>
+                        </td>
                       </motion.tr>
                     ))
                   )}
@@ -195,6 +235,87 @@ export function AttendanceClient({ initialData, initialAnalytics }: Props) {
           </motion.div>
         </main>
       </div>
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* Request Live Attendance Check Modal                          */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {selectedStudentForCheck && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md p-5 overflow-hidden"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-amber-50 border border-amber-200">
+                  <Zap className="w-4 h-4 text-amber-600" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-900">Request Live Check</h3>
+              </div>
+              <button
+                onClick={() => setSelectedStudentForCheck(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <p className="text-xs text-slate-600">
+                Dispatch an on-demand 10-minute compliance challenge to{" "}
+                <span className="font-bold text-slate-900">{selectedStudentForCheck.name}</span>.
+                The student must respond via mobile app before the 10-minute countdown expires.
+              </p>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Challenge Prompt / Question
+                </label>
+                <textarea
+                  rows={3}
+                  value={checkPrompt}
+                  onChange={(e) => setCheckPrompt(e.target.value)}
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-amber-500 text-slate-900"
+                  placeholder="e.g. Verify current workstation presence and summarize today's milestone..."
+                />
+              </div>
+
+              {checkSuccessMsg && (
+                <div className="flex items-center gap-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs">
+                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{checkSuccessMsg}</span>
+                </div>
+              )}
+
+              {checkErrorMsg && (
+                <div className="flex items-center gap-2 p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{checkErrorMsg}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedStudentForCheck(null)}
+                  className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSendCheckRequest}
+                  disabled={requestingCheck}
+                  className="px-4 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  {requestingCheck ? "Dispatching..." : "Send Live Challenge"}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

@@ -53,6 +53,9 @@ export default function InternshipManagementScreen() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [stipend, setStipend] = useState('');
+  const [shiftStartTime, setShiftStartTime] = useState('09:00');
+  const [shiftEndTime, setShiftEndTime] = useState('17:00');
+  const [actualHours, setActualHours] = useState('8');
   const [offerLetterUrl, setOfferLetterUrl] = useState<string | null>(null);
   const [proofFileName, setProofFileName] = useState<string | null>(null);
   const [uploadingProof, setUploadingProof] = useState(false);
@@ -103,6 +106,9 @@ export default function InternshipManagementScreen() {
     setStartDate('');
     setEndDate('');
     setStipend('');
+    setShiftStartTime('09:00');
+    setShiftEndTime('17:00');
+    setActualHours('8');
     setOfferLetterUrl(null);
     setProofFileName(null);
     setFormError(null);
@@ -132,6 +138,9 @@ export default function InternshipManagementScreen() {
     setStartDate(item.start_date || '');
     setEndDate(item.end_date || '');
     setStipend(item.stipend || '');
+    setShiftStartTime(item.shift_start_time || '09:00');
+    setShiftEndTime(item.shift_end_time || '17:00');
+    setActualHours(item.actual_hours_per_day ? String(item.actual_hours_per_day) : '8');
     setOfferLetterUrl(item.offer_letter_url || null);
     setProofFileName(item.offer_letter_url ? item.offer_letter_url.split('/').pop() || 'offer_proof' : null);
     setFormError(null);
@@ -238,6 +247,14 @@ export default function InternshipManagementScreen() {
       setFormError('Job role / designation is required.');
       return;
     }
+    if (!shiftStartTime.trim() || !shiftEndTime.trim()) {
+      setFormError('Shift start time and end time are required (e.g. 09:00 - 17:00).');
+      return;
+    }
+    if (!offerLetterUrl) {
+      setFormError('Offer letter / timing proof is required for college admin verification.');
+      return;
+    }
 
     setActionLoading(true);
     setFormError(null);
@@ -254,6 +271,9 @@ export default function InternshipManagementScreen() {
       start_date: startDate.trim() || undefined,
       end_date: endDate.trim() || undefined,
       stipend: stipend.trim() || undefined,
+      shift_start_time: shiftStartTime.trim(),
+      shift_end_time: shiftEndTime.trim(),
+      actual_hours_per_day: actualHours.trim() ? parseFloat(actualHours.trim()) : undefined,
       offer_letter_url: offerLetterUrl || undefined,
     };
 
@@ -658,6 +678,13 @@ export default function InternshipManagementScreen() {
                     </View>
                   )}
 
+                  <View style={styles.detailRow}>
+                    <Ionicons name="time-outline" size={16} color="#D97706" />
+                    <Text style={[styles.detailText, { color: '#D97706', fontWeight: '600' }]}>
+                      Shift: {item.shift_start_time || '09:00'} - {item.shift_end_time || '17:00'} ({item.actual_hours_per_day || 8} hrs/day)
+                    </Text>
+                  </View>
+
                   {item.offer_letter_url && (
                     <View style={styles.detailRow}>
                       <Ionicons name="document-attach-outline" size={16} color="#059669" />
@@ -857,20 +884,55 @@ export default function InternshipManagementScreen() {
                 </View>
               </View>
 
-              {/* Stipend */}
-              <Text style={styles.inputLabel}>Monthly Stipend (Optional)</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="e.g. ₹25,000 / month"
-                placeholderTextColor="#9CA3AF"
-                value={stipend}
-                onChangeText={setStipend}
-              />
+              {/* Shift Timings */}
+              <View style={{ marginTop: 8, padding: 12, backgroundColor: '#F8FAFC', borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <Text style={[styles.inputLabel, { marginTop: 0 }]}>
+                  Shift Timings & Daily Hours <Text style={{ color: '#EF4444' }}>*</Text>
+                </Text>
+                <Text style={[styles.inputSubtext, { marginBottom: 8 }]}>
+                  Shift hours are validated during daily check-in and automated 10-minute compliance checks.
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 4 }}>Start Time (HH:MM)</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="09:00"
+                      placeholderTextColor="#9CA3AF"
+                      value={shiftStartTime}
+                      onChangeText={setShiftStartTime}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 4 }}>End Time (HH:MM)</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="17:00"
+                      placeholderTextColor="#9CA3AF"
+                      value={shiftEndTime}
+                      onChangeText={setShiftEndTime}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 4 }}>Hours / Day</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="8"
+                      placeholderTextColor="#9CA3AF"
+                      keyboardType="numeric"
+                      value={actualHours}
+                      onChangeText={setActualHours}
+                    />
+                  </View>
+                </View>
+              </View>
 
               {/* Offer Letter / Email Proof Attachment */}
-              <Text style={styles.inputLabel}>Offer Letter / Email Proof (Image or PDF)</Text>
+              <Text style={styles.inputLabel}>
+                Offer Letter / Proof Document <Text style={{ color: '#EF4444' }}>*</Text>
+              </Text>
               <Text style={styles.inputSubtext}>
-                Upload official offer letter, selection email screenshot, or agreement.
+                Upload official offer letter, selection email, or proof of internship timings for Admin verification.
               </Text>
 
               {offerLetterUrl ? (

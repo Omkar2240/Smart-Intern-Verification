@@ -8,7 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_admin
 from app.models.user import User
-from app.services.attendance_service import attendance_analytics, list_attendance
+from app.schemas.attendance import AdminRequestCheckRequest, AdminRequestCheckResponse
+from app.services.attendance_service import (
+    admin_request_live_check,
+    attendance_analytics,
+    list_attendance,
+)
 from app.schemas.admin import AdminAttendanceAnalytics, AdminAttendanceListResponse
 
 router = APIRouter(prefix="/admin", tags=["Admin Attendance"])
@@ -44,3 +49,30 @@ async def get_admin_attendance_analytics(
     period: Annotated[str, Query(pattern="^(week|month|quarter|year)$")] = "month",
 ):
     return await attendance_analytics(db, period=period, admin_user=current_admin)
+
+
+@router.post("/attendance/request-check", response_model=AdminRequestCheckResponse)
+async def request_live_attendance_check(
+    body: AdminRequestCheckRequest,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    On-Demand Live Attendance Check (Surprise Check):
+    Can be triggered by College Admin (for their college) or Department Admin (for their department).
+    Enforces institutional scope and triggers a 10-minute countdown challenge for the student.
+    """
+    task = await admin_request_live_check(
+        db,
+        admin_user=current_admin,
+        student_id=body.student_id,
+        prompt=body.prompt,
+    )
+    return AdminRequestCheckResponse(
+        success=True,
+        task_id=task.id,
+        student_id=task.student_id,
+        expires_at=task.expires_at,
+        message="Live attendance check triggered successfully. Student has 10 minutes to verify.",
+    )
+
