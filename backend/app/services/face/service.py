@@ -257,14 +257,45 @@ class FaceVerificationService:
         self,
         image_bytes: bytes,
         enrolled_embedding: bytes,
-        threshold: float = 0.68,
+        threshold: float = 0.35,
     ) -> Tuple[bool, float]:
         """
         Verify live face against enrolled face embedding (used for attendance).
+        Directly extracts face ROI and computes biometric similarity without failing on minor lighting variations.
         """
-        result = self.process_face_image(image_bytes)
+        if not image_bytes or len(image_bytes) < 100:
+            raise FaceError("Captured selfie image is empty or corrupted")
+
+        try:
+            import io
+            from PIL import Image, ImageOps
+            with Image.open(io.BytesIO(image_bytes)) as pil_img:
+                pil_transposed = ImageOps.exif_transpose(pil_img)
+                if pil_transposed is None:
+                    pil_transposed = pil_img
+                if pil_transposed.mode != "RGB":
+                    pil_transposed = pil_transposed.convert("RGB")
+                pil_transposed.thumbnail((640, 640), Image.Resampling.BILINEAR)
+                image_bgr = cv2.cvtColor(np.array(pil_transposed), cv2.COLOR_RGB2BGR)
+        except Exception:
+            np_arr = np.frombuffer(image_bytes, np.uint8)
+            image_bgr = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+        if image_bgr is None:
+            raise FaceError("Unable to decode selfie image. Please recapture.")
+
+        # Detect single face with forgiving min coverage for phone cameras
+        detected = self.detector.detect_face(image_bgr, min_coverage=0.03)
+
+        # Extract biometric feature embedding
+        embedding = self.recognizer.extract_embedding(detected.face_roi)
+        embedding_bytes = self.recognizer.embedding_to_bytes(embedding)
+
+        import gc
+        gc.collect()
+
         return self.recognizer.is_match(
-            result.embedding_bytes,
+            embedding_bytes,
             enrolled_embedding,
             threshold=threshold,
         )

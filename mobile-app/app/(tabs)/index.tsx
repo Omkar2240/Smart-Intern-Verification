@@ -1433,9 +1433,11 @@ export default function HomeScreen() {
                       <View style={styles.faceMismatchErrorCard}>
                         <Ionicons name="alert-circle" size={24} color="#DC2626" />
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.faceMismatchErrorTitle}>❌ Identity Mismatch Detected</Text>
+                          <Text style={styles.faceMismatchErrorTitle}>
+                            {faceVerifyResult.match_score > 0 ? '❌ Identity Mismatch' : '⚠️ Verification Issue'}
+                          </Text>
                           <Text style={styles.faceMismatchErrorSubtitle}>
-                            The captured face does not match enrolled student {faceVerifyResult.student_name || user?.name}. Another person's face is prohibited for attendance check-in.
+                            {faceVerifyResult.message || `The captured face does not match enrolled student ${faceVerifyResult.student_name || user?.name}.`}
                           </Text>
                         </View>
                       </View>
@@ -1444,7 +1446,7 @@ export default function HomeScreen() {
 
                   <TouchableOpacity onPress={takeOfflineSelfie} style={{ marginTop: 10 }}>
                     <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '700' }}>
-                      {faceVerifyResult?.verified ? 'Retake Photo' : 'Retake Selfie with Your Own Face'}
+                      {faceVerifyResult?.verified ? 'Retake Photo' : 'Retake Selfie Photo'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1476,7 +1478,11 @@ export default function HomeScreen() {
               ) : faceVerifyResult?.verified ? (
                 <Text style={styles.submitCheckInBtnText}>Confirm On-Site Check-In</Text>
               ) : (
-                <Text style={styles.submitCheckInBtnText}>Check-In Blocked (Mismatch Detected)</Text>
+                <Text style={styles.submitCheckInBtnText}>
+                  {(faceVerifyResult?.match_score ?? 0) > 0
+                    ? 'Check-In Blocked (Mismatch Detected)'
+                    : 'Check-In Blocked (Verification Required)'}
+                </Text>
               )}
             </TouchableOpacity>
           </View>

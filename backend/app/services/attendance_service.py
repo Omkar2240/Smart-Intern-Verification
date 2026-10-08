@@ -111,7 +111,7 @@ async def verify_student_face(
 
     try:
         is_match, score = face_service.verify_against_stored(
-            face_bytes, enrolled_emb.embedding, threshold=0.65
+            face_bytes, enrolled_emb.embedding, threshold=0.35
         )
     except Exception as fe:
         raise HTTPException(
