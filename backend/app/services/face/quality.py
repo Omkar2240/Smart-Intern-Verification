@@ -38,10 +38,10 @@ class FaceQualityChecker:
 
     def __init__(
         self,
-        min_sharpness: float = 45.0,
-        min_brightness: float = 35.0,
-        max_brightness: float = 230.0,
-        min_contrast: float = 20.0,
+        min_sharpness: float = 12.0,
+        min_brightness: float = 20.0,
+        max_brightness: float = 245.0,
+        min_contrast: float = 12.0,
     ):
         self.min_sharpness = min_sharpness
         self.min_brightness = min_brightness
@@ -85,7 +85,7 @@ class FaceQualityChecker:
             )
 
         # Composite quality score normalized to [0, 1]
-        sharpness_norm = min(1.0, sharpness / 300.0)
+        sharpness_norm = min(1.0, sharpness / 120.0)
         brightness_norm = 1.0 - abs(brightness - 128.0) / 128.0
         contrast_norm = min(1.0, contrast / 80.0)
 

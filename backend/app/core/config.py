@@ -36,12 +36,18 @@ class Settings(BaseSettings):
 
     @property
     def db_connect_args(self) -> dict:
-        """Return asyncpg SSL connect_args when the DB host requires SSL."""
+        """Return asyncpg SSL and pooler connect_args."""
+        args: dict = {}
         needs_ssl = any(
             kw in self.DATABASE_URL
             for kw in ("neon.tech", "ssl=require", "render.com", "dpg-", "supabase", "pooler")
         )
-        return {"ssl": True} if needs_ssl else {}
+        if needs_ssl:
+            args["ssl"] = True
+        if "pooler" in self.DATABASE_URL or "neon.tech" in self.DATABASE_URL:
+            args["prepared_statement_cache_size"] = 0
+            args["statement_cache_size"] = 0
+        return args
 
     # JWT
     SECRET_KEY: str = "change-me-to-a-random-secret-key"
