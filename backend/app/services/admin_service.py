@@ -178,6 +178,13 @@ class AdminService:
                 InternshipResponse.model_validate(i)
                 for i in sorted(r.user.internships or [], key=lambda x: (not x.is_active, x.created_at), reverse=True)
             ]
+            card_image_url = None
+            if r.college_id_storage_ref:
+                if r.college_id_storage_ref.startswith(("http://", "https://")):
+                    card_image_url = r.college_id_storage_ref
+                else:
+                    card_image_url = f"/api/v1/admin/verifications/{r.user_id}/card-image"
+
             items.append(
                 AdminVerificationItem(
                     user_id=r.user_id,
@@ -197,6 +204,7 @@ class AdminService:
                     extracted_metadata=r.extracted_metadata,
                     rejection_reason=r.rejection_reason,
                     has_card_image=bool(r.college_id_storage_ref),
+                    card_image_url=card_image_url,
                     has_face_embedding=bool(r.user.face_embeddings),
                     internships=user_internships,
                     created_at=r.created_at,

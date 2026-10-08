@@ -745,8 +745,12 @@ async def test_admin_attendance_endpoints(client: AsyncClient, db_session: Async
 
 
 @pytest.mark.asyncio
-async def test_admin_get_card_image_fallback(client: AsyncClient, db_session: AsyncSession):
-    """Test admin card image fallback when no uploaded image is available."""
+async def test_admin_get_card_image_not_found_and_remote(client: AsyncClient, db_session: AsyncSession):
+    """Test admin card image returns 404 when not uploaded, and redirects when remote Cloudinary URL is stored."""
+    import uuid
+    from sqlalchemy import select
+    from app.models.identity_verification import IdentityVerification
+
     _, admin_token = await create_admin_user(db_session, role="college_admin")
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
@@ -760,10 +764,26 @@ async def test_admin_get_card_image_fallback(client: AsyncClient, db_session: As
     registration = await register_user(client, user_data=student_data)
     student_id = registration["user"]["id"]
 
+    # When no upload exists, returns 404
     response = await client.get(
         f"/api/v1/admin/verifications/{student_id}/card-image",
         headers=admin_headers,
     )
-    assert response.status_code == 200
-    assert "svg" in response.headers.get("content-type", "")
-    assert b"<svg" in response.content
+    assert response.status_code == 404
+
+    # When remote Cloudinary storage_ref exists, redirects to it
+    iv_res = await db_session.execute(
+        select(IdentityVerification).where(IdentityVerification.user_id == uuid.UUID(student_id))
+    )
+    iv = iv_res.scalar_one_or_none()
+    if iv:
+        iv.college_id_storage_ref = "https://res.cloudinary.com/test/image/upload/sample.jpg"
+        await db_session.commit()
+
+        remote_resp = await client.get(
+            f"/api/v1/admin/verifications/{student_id}/card-image",
+            headers=admin_headers,
+            follow_redirects=False,
+        )
+        assert remote_resp.status_code in (302, 307)
+        assert remote_resp.headers.get("location") == "https://res.cloudinary.com/test/image/upload/sample.jpg"

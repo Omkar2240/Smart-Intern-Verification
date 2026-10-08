@@ -28,6 +28,7 @@ class AdminVerificationItem(BaseModel):
     extracted_metadata: dict | None = None
     rejection_reason: str | None = None
     has_card_image: bool = False
+    card_image_url: str | None = None
     has_face_embedding: bool = False
     internships: list[InternshipResponse] = Field(default_factory=list)
     created_at: datetime

@@ -7,7 +7,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,10 +21,10 @@ from app.schemas.internship import (
     InternshipStatusUpdate,
     InternshipUpdate,
 )
-from app.storage.local import LocalStorage
+from app.storage import get_storage
 
 router = APIRouter(prefix="/internships", tags=["Internships"])
-_storage = LocalStorage()
+_storage = get_storage()
 
 
 @router.post("/upload-proof")
@@ -49,13 +49,14 @@ async def upload_internship_proof(
             content_type=file.content_type,
             subdirectory="offer_letters",
         )
+        url = storage_ref if storage_ref.startswith(("http://", "https://")) else f"/api/v1/internships/proof-file?ref={storage_ref}"
         return {
             "success": True,
             "storage_ref": storage_ref,
             "filename": file.filename,
             "content_type": file.content_type,
-            "url": f"/api/v1/internships/proof-file?ref={storage_ref}",
-            "file_url": f"/api/v1/internships/proof-file?ref={storage_ref}",
+            "url": url,
+            "file_url": url,
         }
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -76,6 +77,8 @@ async def get_internship_proof_file(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="ref or file_path parameter is required.",
         )
+    if target.startswith(("http://", "https://")):
+        return RedirectResponse(url=target)
     abs_path = _storage.get_abs_path(target)
     if not os.path.exists(abs_path):
         raise HTTPException(

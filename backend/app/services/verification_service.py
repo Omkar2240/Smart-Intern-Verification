@@ -18,7 +18,7 @@ from app.models.user import User
 from app.schemas.verification import VerificationStatusResponse
 from app.services.document.verifier import college_id_verifier
 from app.services.face.service import face_service, FaceError
-from app.storage.local import LocalStorage
+from app.storage import get_storage
 from app.core.constants import (
     DEFAULT_VERIFICATION_STATUS,
     DEFAULT_COLLEGE_STATUS,
@@ -45,7 +45,7 @@ class VerificationService:
     """
 
     def __init__(self):
-        self.storage = LocalStorage()
+        self.storage = get_storage()
         self.doc_verifier = college_id_verifier
         self.face_service = face_service
 

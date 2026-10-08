@@ -21,6 +21,7 @@ dependencies = [
     "numpy>=2.0.0",
     "opencv-python-headless>=4.10.0",
     "pytesseract>=0.3.10",
+    "cloudinary (>=1.46.3,<2.0.0)",
 ]
 
 [project.optional-dependencies]

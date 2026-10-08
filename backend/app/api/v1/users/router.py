@@ -15,11 +15,11 @@ from app.schemas.user import UserResponse, UserUpdate
 from app.schemas.auth import ChangePasswordRequest, MessageResponse
 from app.services.auth_service import AuthError, change_password, update_user_profile
 from app.services import profile_service
-from app.storage.local import LocalStorage
+from app.storage import get_storage
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
-_storage = LocalStorage()
+_storage = get_storage()
 
 
 # ---------------------------------------------------------------------------

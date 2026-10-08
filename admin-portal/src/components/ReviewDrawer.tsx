@@ -16,12 +16,10 @@ import {
   ShieldCheck,
   Cpu,
   Scan,
-  CreditCard,
   RefreshCw,
 } from "lucide-react";
 import { VerificationItem, InternshipStage } from "@/types/admin";
 import { api } from "@/lib/api";
-import { SmartIdCard } from "@/components/SmartIdCard";
 
 interface ReviewDrawerProps {
   item: VerificationItem | null;
@@ -58,35 +56,42 @@ export function ReviewDrawer({
   const [internshipActionId, setInternshipActionId] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
-  const [cardTab, setCardTab] = useState<"smart_card" | "scan">("smart_card");
 
   useEffect(() => {
     if (item && isOpen) {
-      setImageLoading(true);
-      setImageError(null);
-      api
-        .getCardImageBlob(item.user_id)
-        .then((url) => {
-          setImageUrl(url);
-          setImageError(null);
-          setCardTab("scan");
-        })
-        .catch((err) => {
-          setImageUrl(null);
-          const msg = err instanceof Error ? err.message : "Physical ID card image not found on storage node";
-          setImageError(msg);
-          setCardTab("smart_card");
-        })
-        .finally(() => setImageLoading(false));
+      if (item.card_image_url && item.card_image_url.startsWith("http")) {
+        setImageUrl(item.card_image_url);
+        setImageError(null);
+        setImageLoading(false);
+      } else {
+        setImageLoading(true);
+        setImageError(null);
+        api
+          .getCardImageBlob(item.user_id)
+          .then((url) => {
+            setImageUrl(url);
+            setImageError(null);
+          })
+          .catch((err) => {
+            setImageUrl(null);
+            const msg = err instanceof Error ? err.message : "Physical ID card image not found on storage node";
+            setImageError(msg);
+          })
+          .finally(() => setImageLoading(false));
+      }
     } else {
       setImageUrl(null);
       setImageError(null);
-      setCardTab("smart_card");
     }
   }, [item, isOpen]);
 
   const handleRetryFetch = () => {
     if (!item) return;
+    if (item.card_image_url && item.card_image_url.startsWith("http")) {
+      setImageUrl(item.card_image_url);
+      setImageError(null);
+      return;
+    }
     setImageLoading(true);
     setImageError(null);
     api
@@ -94,7 +99,6 @@ export function ReviewDrawer({
       .then((url) => {
         setImageUrl(url);
         setImageError(null);
-        setCardTab("scan");
       })
       .catch((err) => {
         setImageUrl(null);
@@ -248,154 +252,100 @@ export function ReviewDrawer({
 
         {/* Side-by-Side Content */}
         <div className="flex-1 p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Left: Card Viewer (Smart ID / Physical Scan) */}
+          {/* Left: ID Card Image Viewer */}
           <div className="flex flex-col gap-3">
-            {/* View Mode Segmented Bar */}
+            {/* Viewport Header */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200 gap-1">
-                <button
-                  type="button"
-                  onClick={() => setCardTab("smart_card")}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    cardTab === "smart_card"
-                      ? "bg-white text-slate-900 shadow-xs border border-slate-200/80"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  <CreditCard className="w-3.5 h-3.5 text-sky-600" />
-                  <span>Digitized Smart ID</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setCardTab("scan")}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    cardTab === "scan"
-                      ? "bg-white text-slate-900 shadow-xs border border-slate-200/80"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  <Scan className="w-3.5 h-3.5 text-slate-600" />
-                  <span>Physical Document Scan</span>
-                  {imageUrl ? (
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  ) : imageError ? (
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                  ) : null}
-                </button>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-600">
+                  <Scan className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider font-mono">
+                    Uploaded Student ID Card
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Physical document submitted by student
+                  </p>
+                </div>
               </div>
 
-              {cardTab === "scan" && imageUrl && (
-                <a
-                  href={imageUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-mono text-[11px] text-sky-600 hover:text-sky-700 flex items-center gap-1 font-bold transition-colors"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" /> Full Resolution
-                </a>
-              )}
-
-              {cardTab === "scan" && !imageUrl && !imageLoading && (
-                <button
-                  type="button"
-                  onClick={handleRetryFetch}
-                  className="font-mono text-[11px] text-slate-600 hover:text-slate-900 flex items-center gap-1 font-semibold transition-colors"
-                >
-                  <RefreshCw className="w-3 h-3" /> Retry
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {imageUrl && (
+                  <a
+                    href={imageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-mono text-[11px] text-sky-600 hover:text-sky-700 flex items-center gap-1 font-bold transition-colors bg-sky-50 hover:bg-sky-100 px-2.5 py-1.5 rounded-lg border border-sky-200"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> Full Resolution
+                  </a>
+                )}
+                {!imageUrl && !imageLoading && (
+                  <button
+                    type="button"
+                    onClick={handleRetryFetch}
+                    className="font-mono text-[11px] text-slate-600 hover:text-slate-900 flex items-center gap-1 font-semibold transition-colors bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-200 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3 h-3" /> Retry
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Tab 1: Digitized Smart ID Card */}
-            {cardTab === "smart_card" && (
-              <div className="flex flex-col gap-2.5">
-                <SmartIdCard item={item} imageUrl={imageUrl} />
-                {imageError && (
-                  <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200 text-amber-800 text-[11px] flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <ShieldAlert className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                      Physical document file unmounted on server disk • Displaying verified roster ID
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setCardTab("scan")}
-                      className="font-bold underline hover:text-amber-900 ml-2 shrink-0"
-                    >
-                      Inspect Scan Feed
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Document Viewfinder */}
+            <div className="relative rounded-2xl border border-slate-800 bg-slate-950 flex items-center justify-center min-h-[380px] overflow-hidden group shadow-lg">
+              <div className="absolute top-2.5 left-2.5 font-mono text-cyan-400/60 text-xs select-none pointer-events-none">⌜</div>
+              <div className="absolute top-2.5 right-2.5 font-mono text-cyan-400/60 text-xs select-none pointer-events-none">⌝</div>
+              <div className="absolute bottom-2.5 left-2.5 font-mono text-cyan-400/60 text-xs select-none pointer-events-none">⌞</div>
+              <div className="absolute bottom-2.5 right-2.5 font-mono text-cyan-400/60 text-xs select-none pointer-events-none">⌟</div>
 
-            {/* Tab 2: Physical Document Viewfinder */}
-            {cardTab === "scan" && (
-              <div className="relative rounded-2xl border border-slate-800 bg-slate-950 flex items-center justify-center min-h-[340px] overflow-hidden group shadow-lg">
-                <div className="absolute top-2.5 left-2.5 font-mono text-cyan-400/60 text-xs select-none pointer-events-none">⌜</div>
-                <div className="absolute top-2.5 right-2.5 font-mono text-cyan-400/60 text-xs select-none pointer-events-none">⌝</div>
-                <div className="absolute bottom-2.5 left-2.5 font-mono text-cyan-400/60 text-xs select-none pointer-events-none">⌞</div>
-                <div className="absolute bottom-2.5 right-2.5 font-mono text-cyan-400/60 text-xs select-none pointer-events-none">⌟</div>
+              {imageUrl && (
+                <div className="absolute left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-scanline pointer-events-none z-10 opacity-75" />
+              )}
 
-                {imageUrl && (
-                  <div className="absolute left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-scanline pointer-events-none z-10 opacity-75" />
-                )}
-
-                {imageLoading ? (
-                  <div className="flex flex-col items-center gap-3 text-slate-400 py-12">
-                    <Loader2 className="w-7 h-7 animate-spin text-cyan-400" />
-                    <span className="font-mono text-xs text-slate-300">Decrypting ID card stream...</span>
+              {imageLoading ? (
+                <div className="flex flex-col items-center gap-3 text-slate-400 py-16">
+                  <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
+                  <span className="font-mono text-xs text-slate-300">Loading student ID card image...</span>
+                </div>
+              ) : imageUrl ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={imageUrl}
+                  alt="Student College ID"
+                  className="w-full h-full object-contain rounded-xl max-h-[440px] p-2"
+                  onError={() => {
+                    setImageError("Failed to render ID card image from the source URL.");
+                    setImageUrl(null);
+                  }}
+                />
+              ) : imageError ? (
+                <div className="flex flex-col items-center gap-3 p-8 text-center text-slate-400 max-w-sm">
+                  <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                    <ShieldAlert className="w-6 h-6" />
                   </div>
-                ) : imageUrl ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    src={imageUrl}
-                    alt="Student College ID"
-                    className="w-full h-full object-contain rounded-xl max-h-[420px] p-2"
-                  />
-                ) : imageError ? (
-                  <div className="flex flex-col items-center gap-3 p-8 text-center text-slate-400 max-w-sm">
-                    <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                      <ShieldAlert className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-200">Physical Document Unreachable</h4>
-                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                        The physical scan image uploaded by the student is unavailable on the storage node (e.g. wiped after ephemeral instance restart).
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <button
-                        type="button"
-                        onClick={() => setCardTab("smart_card")}
-                        className="px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-mono text-xs font-bold transition-colors shadow-xs"
-                      >
-                        View Digitized Smart ID
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleRetryFetch}
-                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-xs font-bold transition-colors border border-slate-700"
-                      >
-                        Retry Scan
-                      </button>
-                    </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-200">ID Card Image Unavailable</h4>
+                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                      {imageError}
+                    </p>
                   </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-3 p-8 text-center text-slate-400">
-                    <ShieldAlert className="w-8 h-8 text-slate-500" />
-                    <span className="text-xs font-medium text-slate-400">No physical ID card upload on file</span>
-                    <button
-                      type="button"
-                      onClick={() => setCardTab("smart_card")}
-                      className="px-3 py-1 rounded bg-slate-800 text-sky-400 font-mono text-xs hover:bg-slate-700"
-                    >
-                      Open Smart ID Card
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+                  <button
+                    type="button"
+                    onClick={handleRetryFetch}
+                    className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-mono text-xs font-bold transition-colors border border-slate-700 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Retry Fetch
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-3 p-8 text-center text-slate-400">
+                  <ShieldAlert className="w-8 h-8 text-slate-500" />
+                  <span className="text-xs font-medium text-slate-400">No physical ID card upload on file</span>
+                </div>
+              )}
+            </div>
 
             {/* Inspector Checklist */}
             <div className="text-xs text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1.5">

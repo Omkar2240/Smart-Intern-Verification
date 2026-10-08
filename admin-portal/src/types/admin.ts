@@ -72,6 +72,7 @@ export interface VerificationItem {
   } | null;
   rejection_reason?: string | null;
   has_card_image: boolean;
+  card_image_url?: string | null;
   has_face_embedding: boolean;
   is_verified?: boolean;
   internships?: InternshipItem[];

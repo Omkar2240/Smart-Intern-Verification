@@ -62,6 +62,19 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "./uploads"
     MAX_UPLOAD_SIZE_MB: int = 10
 
+    # Cloudinary Cloud Storage
+    CLOUDINARY_CLOUD_NAME: str | None = None
+    CLOUDINARY_API_KEY: str | None = None
+    CLOUDINARY_API_SECRET: str | None = None
+    CLOUDINARY_URL: str | None = None
+
+    @property
+    def is_cloudinary_configured(self) -> bool:
+        return bool(
+            self.CLOUDINARY_URL
+            or (self.CLOUDINARY_CLOUD_NAME and self.CLOUDINARY_API_KEY and self.CLOUDINARY_API_SECRET)
+        )
+
     # Email
     EMAIL_ENABLED: bool = False
 
