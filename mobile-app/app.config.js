@@ -10,23 +10,18 @@ module.exports = ({ config }) => {
     icon: './assets/images/icon.png',
     scheme: 'trackintern',
     userInterfaceStyle: 'automatic',
-    newArchEnabled: true,
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'com.trackintern.app',
     },
     android: {
       package: 'com.trackintern.app',
-      // Cleartext HTTP enabled only in development for local emulator loopback (10.0.2.2:8000 / localhost)
-      // Automatically disabled in production release builds to enforce HTTPS
-      usesCleartextTraffic: !isProduction,
       adaptiveIcon: {
         backgroundColor: '#E6F4FE',
         foregroundImage: './assets/images/android-icon-foreground.png',
         backgroundImage: './assets/images/android-icon-background.png',
         monochromeImage: './assets/images/android-icon-monochrome.png',
       },
-      edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
     },
     web: {
@@ -35,6 +30,9 @@ module.exports = ({ config }) => {
     },
     plugins: [
       'expo-router',
+      'expo-font',
+      'expo-secure-store',
+      'expo-web-browser',
       [
         'expo-splash-screen',
         {

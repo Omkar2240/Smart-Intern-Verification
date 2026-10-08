@@ -159,6 +159,30 @@ export interface InternshipCreatePayload {
   offer_letter_url?: string;
 }
 
+export function extractErrorMessage(errorData: any, fallback = 'Request failed'): string {
+  if (!errorData) return fallback;
+  if (typeof errorData === 'string') return errorData;
+  if (typeof errorData.detail === 'string') return errorData.detail;
+  if (typeof errorData.message === 'string') return errorData.message;
+  if (typeof errorData.error === 'string') return errorData.error;
+  if (Array.isArray(errorData.detail)) {
+    return errorData.detail
+      .map((d: any) => {
+        if (typeof d === 'string') return d;
+        const field = Array.isArray(d.loc) ? d.loc[d.loc.length - 1] : '';
+        const rawMsg = d.msg || JSON.stringify(d);
+        const cleanMsg = rawMsg.replace(/^Value error,\s*/i, '');
+        return field && field !== 'body' ? `${field}: ${cleanMsg}` : cleanMsg;
+      })
+      .filter(Boolean)
+      .join('\n');
+  }
+  if (typeof errorData.detail === 'object' && errorData.detail !== null) {
+    return errorData.detail.message || errorData.detail.error || JSON.stringify(errorData.detail);
+  }
+  return fallback;
+}
+
 class ApiService {
   private baseUrl = API_BASE_URL;
   private readonly defaultTimeoutMs = 6000; // 6s timeout to prevent hanging
@@ -239,20 +263,16 @@ class ApiService {
     }
 
     if (!response.ok) {
-      let errorDetail = 'Request failed';
+      let errorDetail = `HTTP ${response.status}: ${response.statusText}`;
       let errorCode: string | undefined = undefined;
       try {
         const errorData = await response.json();
-        if (typeof errorData.detail === 'string') {
-          errorDetail = errorData.detail;
-        } else if (Array.isArray(errorData.detail)) {
-          errorDetail = errorData.detail.map((d: any) => d.msg || JSON.stringify(d)).join(', ');
-        }
+        errorDetail = extractErrorMessage(errorData, errorDetail);
         if (errorData.code) {
           errorCode = errorData.code;
         }
       } catch {
-        errorDetail = `HTTP ${response.status}: ${response.statusText}`;
+        // Fallback to HTTP status
       }
       const error: any = new Error(errorDetail);
       error.code = errorCode;
