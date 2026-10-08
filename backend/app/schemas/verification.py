@@ -42,3 +42,12 @@ class VerificationStepResponse(BaseModel):
     step_status: str
     overall_status: str
     extracted_metadata: dict | None = None
+
+
+class FaceValidationResponse(BaseModel):
+    detected: bool
+    aligned: bool
+    clear: bool
+    quality_score: float
+    message: str
+

@@ -11,6 +11,7 @@ from app.api.deps import get_current_active_user
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.verification import (
+    FaceValidationResponse,
     SelectDepartmentRequest,
     SelectCollegeRequest,
     VerificationStatusResponse,
@@ -131,6 +132,19 @@ async def upload_college_id(
         raise HTTPException(status_code=e.status_code, detail=e.detail)
 
 
+@router.post("/face/validate", response_model=FaceValidationResponse)
+async def validate_face(
+    file: UploadFile = File(..., description="Captured face image to validate"),
+    user: User = Depends(get_current_active_user),
+):
+    """
+    Validate a live face frame for presence, alignment, and clarity before enrollment.
+    """
+    image_bytes = await file.read()
+    res = verification_service.validate_face_frame(image_bytes)
+    return FaceValidationResponse(**res)
+
+
 @router.post("/face", response_model=VerificationStepResponse)
 async def enroll_face(
     file: UploadFile = File(..., description="Live face capture image"),
@@ -140,6 +154,7 @@ async def enroll_face(
     """
     Step 3: Capture live face, validate liveness and quality, and store ArcFace biometric embedding.
     """
+    import gc
     try:
         image_bytes = await file.read()
         record = await verification_service.enroll_face(
@@ -157,3 +172,6 @@ async def enroll_face(
         )
     except VerificationServiceError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
+    finally:
+        gc.collect()
+

@@ -119,10 +119,13 @@ class OCRService:
         Extract text and parse fields from document image bytes.
         """
         try:
+            import gc
             image = Image.open(io.BytesIO(image_bytes))
             # Convert to RGB if needed
             if image.mode not in ("RGB", "L"):
                 image = image.convert("RGB")
+            # Downscale large smartphone photos to max 1280x1280 for OCR
+            image.thumbnail((1280, 1280), Image.Resampling.LANCZOS)
         except Exception as e:
             raise ValueError(f"Invalid image format: {e}")
 
@@ -135,6 +138,8 @@ class OCRService:
             # Pytesseract binary not found or failed on system
             # Fall back to empty raw text, which will safely trigger manual_review
             raw_text = ""
+        finally:
+            gc.collect()
 
         return self.parser.parse(raw_text)
 

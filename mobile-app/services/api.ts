@@ -130,6 +130,14 @@ export interface VerificationStepResult {
   extracted_metadata?: Record<string, any>;
 }
 
+export interface FaceValidationResult {
+  detected: boolean;
+  aligned: boolean;
+  clear: boolean;
+  quality_score: number;
+  message: string;
+}
+
 export interface Internship {
   id: string;
   user_id: string;
@@ -631,6 +639,24 @@ class ApiService {
       },
       true,
       60000
+    );
+  }
+
+  async validateFace(
+    fileUri: string,
+    mimeType = 'image/jpeg',
+    filename = 'face_probe.jpg',
+    base64Data?: string | null
+  ): Promise<FaceValidationResult> {
+    const formData = await this.createFormDataWithFile(fileUri, mimeType, filename, 'file', base64Data);
+    return this.request<FaceValidationResult>(
+      '/api/v1/verification/face/validate',
+      {
+        method: 'POST',
+        body: formData,
+      },
+      true,
+      15000
     );
   }
 

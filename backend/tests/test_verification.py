@@ -264,3 +264,21 @@ async def test_duplicate_face_rejected(client: AsyncClient, db_session: AsyncSes
         )
         assert resp_dup.status_code == 409
         assert "already registered" in resp_dup.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_face_validation_probe(client: AsyncClient):
+    reg = await register_user(client)
+    headers = {"Authorization": f"Bearer {reg['access_token']}"}
+
+    # Blank/empty image test
+    resp = await client.post(
+        "/api/v1/verification/face/validate",
+        files={"file": ("probe.jpg", b"", "image/jpeg")},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["detected"] is False
+    assert "No image data" in data["message"]
+

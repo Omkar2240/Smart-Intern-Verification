@@ -382,6 +382,11 @@ class VerificationService:
         await db.refresh(record)
         return record
 
+    def validate_face_frame(self, image_bytes: bytes) -> dict:
+        """Validate live captured frame for presence, alignment, and quality."""
+        return self.face_service.validate_face_image(image_bytes)
+
+
     def _recompute_overall_status(self, record: IdentityVerification):
         """Update overall status based on sub-step statuses."""
         if (

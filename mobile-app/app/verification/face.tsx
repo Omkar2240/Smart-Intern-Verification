@@ -34,8 +34,9 @@ export default function FaceVerificationScreen() {
   const [faceUri, setFaceUri] = useState<string | null>(null);
   const [faceBase64, setFaceBase64] = useState<string | null>(null);
   const [faceMime, setFaceMime] = useState<string>('image/jpeg');
-  const [isReadyToCapture, setIsReadyToCapture] = useState(false);
   const [isCameraReady, setIsCameraReady] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
+  const [isFaceVerified, setIsFaceVerified] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [progressStage, setProgressStage] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -65,49 +66,71 @@ export default function FaceVerificationScreen() {
     return () => scanLoop.stop();
   }, [scanLineAnim]);
 
-  // Real-time scan timer: When camera opens, analyze & detect face positioning
-  useEffect(() => {
-    if (!faceUri && isCameraReady) {
-      setIsReadyToCapture(false);
-      const timer = setTimeout(() => {
-        setIsReadyToCapture(true);
-        // Subtle haptic pulse animation on ready
+  // Capture photo from live CameraView and validate genuine face presence & alignment
+  const handleCaptureFromCamera = async () => {
+    if (!cameraRef.current || !isCameraReady || isValidating) return;
+
+    try {
+      setIsValidating(true);
+      setErrorMsg(null);
+      setIsFaceVerified(false);
+
+      // Quality 0.70 produces lightweight ~150KB image, safe for Render 512MB limit
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.70,
+        skipProcessing: false,
+        base64: true,
+      });
+
+      if (!photo?.uri) {
+        setIsValidating(false);
+        return;
+      }
+
+      setFaceUri(photo.uri);
+      setFaceBase64(photo.base64 || null);
+      setFaceMime('image/jpeg');
+
+      // Probe backend for face detection, alignment, and clarity
+      await validateCapturedFace(photo.uri, photo.base64 || null);
+    } catch (e: any) {
+      console.warn('Camera capture error, falling back to picker:', e);
+      fallbackCapturePicker();
+    }
+  };
+
+  const validateCapturedFace = async (uri: string, b64?: string | null) => {
+    setIsValidating(true);
+    try {
+      const filename = uri.split('/').pop() || 'face_probe.jpg';
+      const result = await api.validateFace(uri, 'image/jpeg', filename, b64);
+
+      if (result.detected && result.aligned && result.clear) {
+        setIsFaceVerified(true);
+        setErrorMsg(null);
+        // Haptic feedback pulse on genuine face detection
         Animated.sequence([
           Animated.timing(pulseAnim, { toValue: 1.05, duration: 200, useNativeDriver: true }),
           Animated.timing(pulseAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
         ]).start();
-      }, 1800);
-
-      return () => clearTimeout(timer);
-    }
-  }, [faceUri, isCameraReady, pulseAnim]);
-
-  // Capture photo from live CameraView
-  const handleCaptureFromCamera = async () => {
-    if (!isReadyToCapture) {
-      Alert.alert('Align Face', 'Please position your face steadily inside the oval frame until the indicator turns green.');
-      return;
-    }
-
-    try {
-      if (cameraRef.current) {
-        const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.85,
-          skipProcessing: false,
-          base64: true,
-        });
-
-        if (photo?.uri) {
-          setFaceUri(photo.uri);
-          setFaceBase64(photo.base64 || null);
-          setFaceMime('image/jpeg');
-          setErrorMsg(null);
-        }
+      } else {
+        setIsFaceVerified(false);
+        const failMsg =
+          result.message || 'Face not properly detected or aligned. Please center your face inside the frame.';
+        setErrorMsg(failMsg);
+        Alert.alert('Face Alignment Alert', failMsg, [{ text: 'Reposition & Try Again', onPress: handleRetake }]);
       }
-    } catch (e: any) {
-      console.warn('Camera capture error, falling back to picker:', e);
-      // Fallback in case of hardware glitch
-      fallbackCapturePicker();
+    } catch (err: any) {
+      console.warn('Face validation network issue:', err);
+      setIsFaceVerified(false);
+      const is404 = err?.message?.includes('404') || err?.message?.includes('Not Found');
+      const msg = is404
+        ? 'Backend on Render has not been updated with the new face validation service yet (404 Not Found). Please push git commits so Render redeploys.'
+        : (err?.message || 'Face validation network error. Please try again.');
+      setErrorMsg(msg);
+      Alert.alert('Backend Service Update', msg, [{ text: 'OK', onPress: handleRetake }]);
+    } finally {
+      setIsValidating(false);
     }
   };
 
@@ -117,7 +140,7 @@ export default function FaceVerificationScreen() {
         cameraType: ImagePicker.CameraType.front,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.85,
+        quality: 0.70,
         base64: true,
       });
 
@@ -127,9 +150,11 @@ export default function FaceVerificationScreen() {
         setFaceBase64(asset.base64 || null);
         setFaceMime(asset.mimeType || 'image/jpeg');
         setErrorMsg(null);
+        await validateCapturedFace(asset.uri, asset.base64 || null);
       }
     } catch (err: any) {
       Alert.alert('Camera Error', err.message || 'Could not take photo.');
+      setIsValidating(false);
     }
   };
 
@@ -137,13 +162,14 @@ export default function FaceVerificationScreen() {
     setFaceUri(null);
     setFaceBase64(null);
     setErrorMsg(null);
-    setIsReadyToCapture(false);
+    setIsFaceVerified(false);
+    setIsValidating(false);
   };
 
   const handleEnroll = async () => {
-    if (!faceUri) {
-      setErrorMsg('Please capture your live face photo before proceeding.');
-      Alert.alert('Face Capture Required', 'Please position your face and capture photo.');
+    if (!faceUri || !isFaceVerified) {
+      setErrorMsg('Please capture a clear, aligned face photo before proceeding.');
+      Alert.alert('Face Capture Required', 'Please position your face steadily inside the oval frame and tap capture.');
       return;
     }
 
@@ -164,8 +190,12 @@ export default function FaceVerificationScreen() {
 
       router.replace('/(tabs)');
     } catch (e: any) {
-      const msg = e?.message || 'Face verification failed. Please ensure you are looking straight and in a well-lit area.';
+      const is502 = e?.message?.includes('502') || e?.message?.includes('Bad Gateway');
+      const msg = is502
+        ? 'Server ran out of memory on Render (502 Bad Gateway). The backend on Render is still running old code. Please push your changes to GitHub to redeploy Render with memory optimizations.'
+        : (e?.message || 'Face verification failed. Please ensure you are looking straight and in a well-lit area.');
       setErrorMsg(msg);
+      setIsFaceVerified(false);
       Alert.alert(
         'Face Verification Alert',
         msg,
@@ -192,7 +222,7 @@ export default function FaceVerificationScreen() {
 
         <Text style={styles.title}>Live Face Enrollment</Text>
         <Text style={styles.subtitle}>
-          Real-time biometric scanner. Align your face inside the oval. The frame will turn green when ready to capture.
+          Real-time biometric scanner. Align your face inside the oval and tap capture. The frame will verify your face presence and clarity.
         </Text>
 
         {/* Error Banner */}
@@ -200,7 +230,7 @@ export default function FaceVerificationScreen() {
           <View style={styles.errorBanner}>
             <Ionicons name="alert-circle" size={20} color="#DC2626" />
             <View style={{ flex: 1 }}>
-              <Text style={styles.errorTitle}>Verification Issue</Text>
+              <Text style={styles.errorTitle}>Face Alignment Alert</Text>
               <Text style={styles.errorDesc}>{errorMsg}</Text>
             </View>
           </View>
@@ -209,14 +239,54 @@ export default function FaceVerificationScreen() {
         {/* Biometric Viewfinder / Oval Section */}
         <View style={styles.viewfinderContainer}>
           {faceUri ? (
-            /* Captured Static Preview */
-            <View style={[styles.ovalFrame, styles.ovalFrameReady]}>
+            /* Captured Static Preview with Verification State */
+            <Animated.View
+              style={[
+                styles.ovalFrame,
+                isFaceVerified ? styles.ovalFrameReady : styles.ovalFrameError,
+                { transform: [{ scale: pulseAnim }] },
+              ]}
+            >
               <Image source={{ uri: faceUri }} style={styles.facePreview} />
-              <View style={[styles.cornerGuide, styles.cornerTL, styles.cornerReady]} />
-              <View style={[styles.cornerGuide, styles.cornerTR, styles.cornerReady]} />
-              <View style={[styles.cornerGuide, styles.cornerBL, styles.cornerReady]} />
-              <View style={[styles.cornerGuide, styles.cornerBR, styles.cornerReady]} />
-            </View>
+
+              {/* Validation Spinner Overlay */}
+              {isValidating && (
+                <View style={styles.validatingOverlay}>
+                  <ActivityIndicator size="large" color="#FFFFFF" />
+                  <Text style={styles.validatingOverlayText}>Validating Face...</Text>
+                </View>
+              )}
+
+              {/* Corner Guides */}
+              <View
+                style={[
+                  styles.cornerGuide,
+                  styles.cornerTL,
+                  isFaceVerified ? styles.cornerReady : styles.cornerError,
+                ]}
+              />
+              <View
+                style={[
+                  styles.cornerGuide,
+                  styles.cornerTR,
+                  isFaceVerified ? styles.cornerReady : styles.cornerError,
+                ]}
+              />
+              <View
+                style={[
+                  styles.cornerGuide,
+                  styles.cornerBL,
+                  isFaceVerified ? styles.cornerReady : styles.cornerError,
+                ]}
+              />
+              <View
+                style={[
+                  styles.cornerGuide,
+                  styles.cornerBR,
+                  isFaceVerified ? styles.cornerReady : styles.cornerError,
+                ]}
+              />
+            </Animated.View>
           ) : !permission?.granted ? (
             /* Permission Request View */
             <View style={styles.permissionCard}>
@@ -230,11 +300,11 @@ export default function FaceVerificationScreen() {
               </TouchableOpacity>
             </View>
           ) : (
-            /* Live Camera Viewfinder with Real-time HUD */
+            /* Live Camera Viewfinder with Real-time Scanning HUD */
             <Animated.View
               style={[
                 styles.ovalFrame,
-                isReadyToCapture ? styles.ovalFrameReady : styles.ovalFrameScanning,
+                styles.ovalFrameScanning,
                 { transform: [{ scale: pulseAnim }] },
               ]}
             >
@@ -246,72 +316,57 @@ export default function FaceVerificationScreen() {
               />
 
               {/* Animated Real-time Scanning Laser Line */}
-              {!isReadyToCapture && (
-                <Animated.View
-                  style={[
-                    styles.scanLaserLine,
-                    { transform: [{ translateY: scanLineAnim }] },
-                  ]}
-                />
-              )}
+              <Animated.View
+                style={[
+                  styles.scanLaserLine,
+                  { transform: [{ translateY: scanLineAnim }] },
+                ]}
+              />
 
               {/* Corner Guides */}
-              <View
-                style={[
-                  styles.cornerGuide,
-                  styles.cornerTL,
-                  isReadyToCapture && styles.cornerReady,
-                ]}
-              />
-              <View
-                style={[
-                  styles.cornerGuide,
-                  styles.cornerTR,
-                  isReadyToCapture && styles.cornerReady,
-                ]}
-              />
-              <View
-                style={[
-                  styles.cornerGuide,
-                  styles.cornerBL,
-                  isReadyToCapture && styles.cornerReady,
-                ]}
-              />
-              <View
-                style={[
-                  styles.cornerGuide,
-                  styles.cornerBR,
-                  isReadyToCapture && styles.cornerReady,
-                ]}
-              />
+              <View style={[styles.cornerGuide, styles.cornerTL]} />
+              <View style={[styles.cornerGuide, styles.cornerTR]} />
+              <View style={[styles.cornerGuide, styles.cornerBL]} />
+              <View style={[styles.cornerGuide, styles.cornerBR]} />
             </Animated.View>
           )}
 
           {/* Real-time Status Badge */}
           {!faceUri && permission?.granted && (
-            <View
-              style={[
-                styles.statusBadge,
-                isReadyToCapture ? styles.statusBadgeReady : styles.statusBadgeScanning,
-              ]}
-            >
-              {isReadyToCapture ? (
-                <>
-                  <Ionicons name="checkmark-circle" size={18} color="#10B981" />
-                  <Text style={styles.statusTextReady}>Face Aligned & Detected — Ready to Capture</Text>
-                </>
-              ) : (
-                <>
-                  <ActivityIndicator size="small" color="#D97706" style={{ marginRight: 6 }} />
-                  <Text style={styles.statusTextScanning}>Scanning face... Keep steady inside frame</Text>
-                </>
-              )}
+            <View style={[styles.statusBadge, styles.statusBadgeScanning]}>
+              <Ionicons name="scan-outline" size={16} color="#D97706" />
+              <Text style={styles.statusTextScanning}>Align your face inside the oval frame</Text>
+            </View>
+          )}
+
+          {faceUri && isValidating && (
+            <View style={[styles.statusBadge, styles.statusBadgeValidating]}>
+              <ActivityIndicator size="small" color="#2563EB" style={{ marginRight: 6 }} />
+              <Text style={styles.statusTextValidating}>Checking face alignment & clarity...</Text>
+            </View>
+          )}
+
+          {faceUri && !isValidating && isFaceVerified && (
+            <View style={[styles.statusBadge, styles.statusBadgeReady]}>
+              <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+              <Text style={styles.statusTextReady}>Face Aligned & Detected — Ready to Enroll</Text>
+            </View>
+          )}
+
+          {faceUri && !isValidating && !isFaceVerified && (
+            <View style={[styles.statusBadge, styles.statusBadgeError]}>
+              <Ionicons name="alert-circle" size={18} color="#DC2626" />
+              <Text style={styles.statusTextError}>Face Not Detected / Misaligned</Text>
             </View>
           )}
 
           {/* Shutter / Retake Actions */}
           {faceUri ? (
-            <TouchableOpacity style={styles.retakeTrigger} onPress={handleRetake}>
+            <TouchableOpacity
+              style={styles.retakeTrigger}
+              onPress={handleRetake}
+              disabled={submitting || isValidating}
+            >
               <Feather name="refresh-cw" size={16} color="#6B7280" style={{ marginRight: 6 }} />
               <Text style={styles.retakeTriggerText}>Retake Photo</Text>
             </TouchableOpacity>
@@ -319,26 +374,17 @@ export default function FaceVerificationScreen() {
             <TouchableOpacity
               style={[
                 styles.shutterButton,
-                isReadyToCapture ? styles.shutterButtonReady : styles.shutterButtonDisabled,
+                isCameraReady && !isValidating ? styles.shutterButtonActive : styles.shutterButtonDisabled,
               ]}
               onPress={handleCaptureFromCamera}
-              disabled={!isReadyToCapture}
+              disabled={!isCameraReady || isValidating}
               activeOpacity={0.8}
             >
-              <View style={[styles.shutterInnerCircle, isReadyToCapture && styles.shutterInnerReady]}>
-                <Ionicons
-                  name="camera"
-                  size={26}
-                  color={isReadyToCapture ? '#FFFFFF' : '#9CA3AF'}
-                />
+              <View style={[styles.shutterInnerCircle, styles.shutterInnerActive]}>
+                <Ionicons name="camera" size={24} color="#FFFFFF" />
               </View>
-              <Text
-                style={[
-                  styles.shutterButtonText,
-                  isReadyToCapture ? styles.shutterTextReady : styles.shutterTextDisabled,
-                ]}
-              >
-                {isReadyToCapture ? 'Capture Face' : 'Aligning Face...'}
+              <Text style={styles.shutterButtonText}>
+                {isValidating ? 'Validating...' : 'Capture Face'}
               </Text>
             </TouchableOpacity>
           )}
@@ -374,7 +420,7 @@ export default function FaceVerificationScreen() {
         </View>
 
         {/* Submit CTA */}
-        {faceUri && (
+        {faceUri && isFaceVerified && !isValidating && (
           <View style={styles.footer}>
             <TouchableOpacity
               style={[styles.primaryButton, submitting && styles.buttonDisabled]}
@@ -390,6 +436,20 @@ export default function FaceVerificationScreen() {
                   <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" style={{ marginLeft: 8 }} />
                 </>
               )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Retry CTA when face check failed */}
+        {faceUri && !isFaceVerified && !isValidating && (
+          <View style={styles.footer}>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={handleRetake}
+              activeOpacity={0.85}
+            >
+              <Feather name="refresh-cw" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={styles.retryButtonText}>Reposition Face & Retake</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -496,10 +556,31 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 8,
   },
+  ovalFrameError: {
+    borderColor: '#EF4444',
+    borderStyle: 'solid',
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
+  },
   facePreview: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
+  },
+  validatingOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.60)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 10,
+  },
+  validatingOverlayText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
   scanLaserLine: {
     position: 'absolute',
@@ -523,6 +604,9 @@ const styles = StyleSheet.create({
   },
   cornerReady: {
     borderColor: '#10B981',
+  },
+  cornerError: {
+    borderColor: '#EF4444',
   },
   cornerTL: {
     top: 24,
@@ -562,20 +646,40 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FDE68A',
   },
+  statusBadgeValidating: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
   statusBadgeReady: {
     backgroundColor: '#D1FAE5',
     borderWidth: 1,
     borderColor: '#A7F3D0',
+  },
+  statusBadgeError: {
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
   },
   statusTextScanning: {
     fontSize: 13,
     fontWeight: '600',
     color: '#B45309',
   },
+  statusTextValidating: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1D4ED8',
+  },
   statusTextReady: {
     fontSize: 13,
     fontWeight: '700',
     color: '#065F46',
+  },
+  statusTextError: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#B91C1C',
   },
   shutterButton: {
     flexDirection: 'row',
@@ -586,11 +690,11 @@ const styles = StyleSheet.create({
     gap: 10,
     elevation: 3,
   },
-  shutterButtonReady: {
-    backgroundColor: '#10B981',
-    shadowColor: '#10B981',
+  shutterButtonActive: {
+    backgroundColor: '#1F2937',
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
   },
   shutterButtonDisabled: {
@@ -600,22 +704,16 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  shutterInnerReady: {
-    backgroundColor: '#059669',
+  shutterInnerActive: {
+    backgroundColor: '#374151',
   },
   shutterButtonText: {
     fontSize: 15,
     fontWeight: '700',
-  },
-  shutterTextReady: {
     color: '#FFFFFF',
-  },
-  shutterTextDisabled: {
-    color: '#9CA3AF',
   },
   retakeTrigger: {
     flexDirection: 'row',
@@ -730,6 +828,24 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 10,
     elevation: 4,
+  },
+  retryButton: {
+    backgroundColor: '#DC2626',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 16,
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
   buttonDisabled: {
     opacity: 0.6,

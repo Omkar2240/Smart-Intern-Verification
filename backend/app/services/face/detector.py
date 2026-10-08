@@ -91,10 +91,29 @@ class FaceDetector:
         faces = []
         if self.net is not None:
             try:
-                self.net.setInputSize((w, h))
-                _, raw_faces = self.net.detect(image_bgr)
+                max_dim = max(h, w)
+                if max_dim > 640:
+                    scale = 640.0 / max_dim
+                    det_w = int(w * scale)
+                    det_h = int(h * scale)
+                    det_img = cv2.resize(image_bgr, (det_w, det_h), interpolation=cv2.INTER_AREA)
+                else:
+                    scale = 1.0
+                    det_w, det_h = w, h
+                    det_img = image_bgr
+
+                self.net.setInputSize((det_w, det_h))
+                _, raw_faces = self.net.detect(det_img)
                 if raw_faces is not None and len(raw_faces) > 0:
-                    faces = raw_faces
+                    if scale != 1.0:
+                        scaled_faces = []
+                        for f in raw_faces:
+                            sf = f.copy()
+                            sf[0:4] = sf[0:4] / scale
+                            scaled_faces.append(sf)
+                        faces = scaled_faces
+                    else:
+                        faces = raw_faces
             except Exception as e:
                 print(f"[WARN] YuNet detection error: {e}")
 
