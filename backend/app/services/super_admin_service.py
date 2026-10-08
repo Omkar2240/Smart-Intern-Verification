@@ -371,7 +371,7 @@ class SuperAdminService:
                 effective_college = row.identity_verification.college
             items.append(AdminStudentResponse(
                 id=row.id, name=row.name, email=row.email, registration_number=row.registration_number,
-                mobile_number=row.mobile_number,
+                mobile_number=row.mobile_number, role=row.role,
                 college_id=effective_college.id if effective_college else None,
                 college_name=effective_college.name if effective_college else None,
                 department_id=row.department_id, department_name=row.department.name if row.department else None,
@@ -435,7 +435,8 @@ class SuperAdminService:
         return AdminStudentResponse(
             id=student.id, name=student.name, email=student.email,
             registration_number=student.registration_number,
-            mobile_number=student.mobile_number, college_id=student.college_id,
+            mobile_number=student.mobile_number, role=student.role,
+            college_id=student.college_id,
             college_name=college.name, department_id=student.department_id,
             department_name=department.name if department else None,
             verification_status=DEFAULT_VERIFICATION_STATUS,
@@ -519,6 +520,7 @@ class SuperAdminService:
         return AdminStudentResponse(
             id=student.id, name=student.name, email=student.email,
             registration_number=student.registration_number, mobile_number=student.mobile_number,
+            role=student.role,
             college_id=student.college_id, college_name=college.name,
             department_id=student.department_id, department_name=department.name,
             verification_status=(

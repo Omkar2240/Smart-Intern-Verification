@@ -250,6 +250,7 @@ class AdminStudentResponse(BaseModel):
     email: str
     registration_number: str
     mobile_number: str
+    role: str = "student"
     college_id: UUID | None
     college_name: str | None
     department_id: UUID | None

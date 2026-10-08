@@ -192,7 +192,18 @@ async def test_duplicate_face_rejected(client: AsyncClient, db_session: AsyncSes
     await db_session.commit()
     await db_session.refresh(college)
 
+    department = Department(
+        college_id=college.id,
+        name="Computer Science",
+        code="CSE",
+        is_active=True,
+    )
+    db_session.add(department)
+    await db_session.commit()
+    await db_session.refresh(department)
+
     await client.post("/api/v1/verification/college", json={"college_id": str(college.id)}, headers=headers1)
+    await client.post("/api/v1/verification/department", json={"department_id": str(department.id)}, headers=headers1)
     await client.post(
         "/api/v1/verification/college-id",
         files={"file": ("id1.jpg", create_dummy_id_card(student_name="Original User"), "image/jpeg")},
@@ -237,6 +248,7 @@ async def test_duplicate_face_rejected(client: AsyncClient, db_session: AsyncSes
     headers2 = {"Authorization": f"Bearer {token2}"}
 
     await client.post("/api/v1/verification/college", json={"college_id": str(college.id)}, headers=headers2)
+    await client.post("/api/v1/verification/department", json={"department_id": str(department.id)}, headers=headers2)
     await client.post(
         "/api/v1/verification/college-id",
         files={"file": ("id2.jpg", create_dummy_id_card(student_name="Second User"), "image/jpeg")},
