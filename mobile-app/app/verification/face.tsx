@@ -32,6 +32,7 @@ export default function FaceVerificationScreen() {
 
   // States
   const [faceUri, setFaceUri] = useState<string | null>(null);
+  const [faceBase64, setFaceBase64] = useState<string | null>(null);
   const [faceMime, setFaceMime] = useState<string>('image/jpeg');
   const [isReadyToCapture, setIsReadyToCapture] = useState(false);
   const [isCameraReady, setIsCameraReady] = useState(false);
@@ -91,12 +92,14 @@ export default function FaceVerificationScreen() {
     try {
       if (cameraRef.current) {
         const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.9,
+          quality: 0.85,
           skipProcessing: false,
+          base64: true,
         });
 
         if (photo?.uri) {
           setFaceUri(photo.uri);
+          setFaceBase64(photo.base64 || null);
           setFaceMime('image/jpeg');
           setErrorMsg(null);
         }
@@ -114,12 +117,14 @@ export default function FaceVerificationScreen() {
         cameraType: ImagePicker.CameraType.front,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.9,
+        quality: 0.85,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         setFaceUri(asset.uri);
+        setFaceBase64(asset.base64 || null);
         setFaceMime(asset.mimeType || 'image/jpeg');
         setErrorMsg(null);
       }
@@ -130,6 +135,7 @@ export default function FaceVerificationScreen() {
 
   const handleRetake = () => {
     setFaceUri(null);
+    setFaceBase64(null);
     setErrorMsg(null);
     setIsReadyToCapture(false);
   };
@@ -150,7 +156,7 @@ export default function FaceVerificationScreen() {
       setTimeout(() => setProgressStage('Extracting ArcFace biometric signature...'), 1800);
 
       const filename = faceUri.split('/').pop() || 'face_capture.jpg';
-      await api.enrollFace(faceUri, faceMime, filename);
+      await api.enrollFace(faceUri, faceMime, filename, faceBase64);
 
       setProgressStage('Enrollment complete!');
       await refreshVerificationStatus();

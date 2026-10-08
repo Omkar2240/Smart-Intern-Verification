@@ -87,6 +87,8 @@ export default function CollegeIdScreen() {
     }
   }, [imageUri, isCameraReady, pulseAnim]);
 
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
+
   // Capture from live camera
   const handleCaptureCard = async () => {
     if (!isReadyToCapture) {
@@ -97,12 +99,14 @@ export default function CollegeIdScreen() {
     try {
       if (cameraRef.current) {
         const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.9,
+          quality: 0.85,
           skipProcessing: false,
+          base64: true,
         });
 
         if (photo?.uri) {
           setImageUri(photo.uri);
+          setImageBase64(photo.base64 || null);
           setImageMime('image/jpeg');
           setStatusResult(null);
           setErrorMessage(null);
@@ -118,12 +122,14 @@ export default function CollegeIdScreen() {
     try {
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
-        quality: 0.9,
+        quality: 0.85,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         setImageUri(asset.uri);
+        setImageBase64(asset.base64 || null);
         setImageMime(asset.mimeType || 'image/jpeg');
         setStatusResult(null);
         setErrorMessage(null);
@@ -143,12 +149,14 @@ export default function CollegeIdScreen() {
 
       const result = await ImagePicker.launchImageLibraryAsync({
         allowsEditing: true,
-        quality: 0.9,
+        quality: 0.85,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         setImageUri(asset.uri);
+        setImageBase64(asset.base64 || null);
         setImageMime(asset.mimeType || 'image/jpeg');
         setStatusResult(null);
         setErrorMessage(null);
@@ -160,6 +168,7 @@ export default function CollegeIdScreen() {
 
   const handleRetake = () => {
     setImageUri(null);
+    setImageBase64(null);
     setStatusResult(null);
     setErrorMessage(null);
     setIsReadyToCapture(false);
@@ -175,7 +184,7 @@ export default function CollegeIdScreen() {
     setErrorMessage(null);
     try {
       const filename = imageUri.split('/').pop() || 'college_id.jpg';
-      const res = await api.uploadVerificationCollegeId(imageUri, imageMime, filename);
+      const res = await api.uploadVerificationCollegeId(imageUri, imageMime, filename, imageBase64);
       await refreshVerificationStatus();
 
       if (res.step_status === 'verified') {

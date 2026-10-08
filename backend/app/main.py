@@ -14,18 +14,32 @@ from app.db.base import Base
 from app.db.session import engine
 import app.models  # noqa: F401
 
+from sqlalchemy import text
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Ensure tables exist on startup
+    # Ensure tables exist on startup and add any newly introduced columns to existing tables
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await conn.execute(text("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) NOT NULL DEFAULT 'student';
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS college_id UUID;
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS department_id UUID;
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions JSON NOT NULL DEFAULT '[]';
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ;
+
+                CREATE INDEX IF NOT EXISTS ix_users_college_id ON users (college_id);
+                CREATE INDEX IF NOT EXISTS ix_users_department_id ON users (department_id);
+                CREATE INDEX IF NOT EXISTS ix_users_role ON users (role);
+            """))
+            logger.info("Database startup table check and column migration completed.")
     except Exception as e:
-        logger.warning(f"Could not automatically create tables at startup: {e}")
+        logger.warning(f"Could not automatically create/migrate tables at startup: {e}")
     yield
 
 

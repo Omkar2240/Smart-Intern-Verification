@@ -39,7 +39,7 @@ class Settings(BaseSettings):
         """Return asyncpg SSL connect_args when the DB host requires SSL."""
         needs_ssl = any(
             kw in self.DATABASE_URL
-            for kw in ("neon.tech", "ssl=require", "render.com")
+            for kw in ("neon.tech", "ssl=require", "render.com", "dpg-", "supabase", "pooler")
         )
         return {"ssl": True} if needs_ssl else {}
 

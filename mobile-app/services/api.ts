@@ -227,10 +227,117 @@ class ApiService {
     }
   }
 
+  private async uriToUint8Array(uri: string): Promise<Uint8Array> {
+    return new Promise((resolve, reject) => {
+      // 1. Try XMLHttpRequest with responseType = 'arraybuffer' (works on React Native iOS & Android for file:// and content://)
+      const xhr = new XMLHttpRequest();
+      xhr.onload = () => {
+        if (xhr.response instanceof ArrayBuffer) {
+          resolve(new Uint8Array(xhr.response));
+        } else if (xhr.response) {
+          const resp = xhr.response as any;
+          if (typeof resp.arrayBuffer === 'function') {
+            resp.arrayBuffer().then((ab: ArrayBuffer) => resolve(new Uint8Array(ab))).catch(reject);
+          } else {
+            const reader = new FileReader();
+            reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+            reader.onerror = reject;
+            reader.readAsArrayBuffer(resp);
+          }
+        } else {
+          reject(new Error(`Empty response from ${uri}`));
+        }
+      };
+      xhr.onerror = () => {
+        // 2. Fallback: fetch (works on Web)
+        fetch(uri)
+          .then((r) => r.arrayBuffer())
+          .then((ab) => resolve(new Uint8Array(ab)))
+          .catch((err) => reject(new Error(`Failed to read file: ${err?.message || err}`)));
+      };
+      xhr.responseType = 'arraybuffer';
+      xhr.open('GET', uri, true);
+      xhr.send(null);
+    });
+  }
+
+  private base64ToUint8Array(base64: string): Uint8Array {
+    const cleanBase64 = base64.includes(',') ? base64.split(',')[1] : base64;
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    const lookup = new Uint8Array(256);
+    for (let i = 0; i < chars.length; i++) {
+      lookup[chars.charCodeAt(i)] = i;
+    }
+    let len = cleanBase64.length;
+    let bufferLength = Math.floor(len * 0.75);
+    if (cleanBase64.endsWith('==')) bufferLength -= 2;
+    else if (cleanBase64.endsWith('=')) bufferLength -= 1;
+    const bytes = new Uint8Array(bufferLength);
+    let p = 0;
+    for (let i = 0; i < len; i += 4) {
+      const enc1 = lookup[cleanBase64.charCodeAt(i)];
+      const enc2 = lookup[cleanBase64.charCodeAt(i + 1)];
+      const enc3 = lookup[cleanBase64.charCodeAt(i + 2)];
+      const enc4 = lookup[cleanBase64.charCodeAt(i + 3)];
+      bytes[p++] = (enc1 << 2) | (enc2 >> 4);
+      if (p < bufferLength) bytes[p++] = ((enc2 & 15) << 4) | (enc3 >> 2);
+      if (p < bufferLength) bytes[p++] = ((enc3 & 3) << 6) | enc4;
+    }
+    return bytes;
+  }
+
+  private async createFormDataWithFile(
+    fileUri: string,
+    mimeType: string,
+    filename: string,
+    fieldName = 'file',
+    base64Data?: string | null
+  ): Promise<FormData> {
+    const formData = new FormData();
+    try {
+      let bytes: Uint8Array;
+      if (base64Data) {
+        bytes = this.base64ToUint8Array(base64Data);
+      } else {
+        bytes = await this.uriToUint8Array(fileUri);
+      }
+
+      // Expo's WinterCG convertFormDataAsync natively checks:
+      // else if (typeof entry === 'object' && 'bytes' in entry) results.push(await entry.bytes());
+      // Providing .bytes() avoids the "Unsupported FormDataPart implementation" exception.
+      const part = {
+        name: filename,
+        type: mimeType || 'image/jpeg',
+        size: bytes.byteLength,
+        bytes: async () => bytes,
+        arrayBuffer: async () => bytes.buffer,
+      };
+
+      formData.append(fieldName, part as any);
+      return formData;
+    } catch (e) {
+      if (__DEV__) console.warn('createFormDataWithFile fallback error:', e);
+      try {
+        const response = await fetch(fileUri);
+        const blob = await response.blob();
+        formData.append(fieldName, blob, filename);
+        return formData;
+      } catch {
+        formData.append(fieldName, {
+          uri: fileUri,
+          type: mimeType || 'image/jpeg',
+          name: filename,
+        } as any);
+        return formData;
+      }
+    }
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
-    requiresAuth = true
+    requiresAuth = true,
+    timeoutMs = this.defaultTimeoutMs
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = await this.getHeaders(requiresAuth, !(options.body instanceof FormData));
@@ -246,7 +353,7 @@ class ApiService {
     let response: Response;
     try {
       if (__DEV__) console.log(`[API REQUEST] ${options.method || 'GET'} ${url}`);
-      response = await this.fetchWithTimeout(url, config);
+      response = await this.fetchWithTimeout(url, config, timeoutMs);
       if (__DEV__) console.log(`[API RESPONSE] ${response.status} ${url}`);
     } catch (e: any) {
       if (__DEV__) console.error(`[API NETWORK ERROR] ${url}:`, e?.message || e);
@@ -264,7 +371,7 @@ class ApiService {
             ...retryHeaders,
             ...options.headers,
           },
-        });
+        }, timeoutMs);
       }
     }
 
@@ -443,13 +550,13 @@ class ApiService {
     );
   }
 
-  async uploadCollegeId(fileUri: string, mimeType: string, filename: string): Promise<StudentProfile> {
-    const formData = new FormData();
-    formData.append('file', {
-      uri: fileUri,
-      type: mimeType,
-      name: filename,
-    } as any);
+  async uploadCollegeId(
+    fileUri: string,
+    mimeType: string,
+    filename: string,
+    base64Data?: string | null
+  ): Promise<StudentProfile> {
+    const formData = await this.createFormDataWithFile(fileUri, mimeType, filename, 'file', base64Data);
 
     return this.request<StudentProfile>(
       '/api/v1/users/me/profile/college-id',
@@ -457,7 +564,8 @@ class ApiService {
         method: 'POST',
         body: formData,
       },
-      true
+      true,
+      60000
     );
   }
 
@@ -504,13 +612,13 @@ class ApiService {
     );
   }
 
-  async uploadVerificationCollegeId(fileUri: string, mimeType: string, filename: string): Promise<VerificationStepResult> {
-    const formData = new FormData();
-    formData.append('file', {
-      uri: fileUri,
-      type: mimeType,
-      name: filename,
-    } as any);
+  async uploadVerificationCollegeId(
+    fileUri: string,
+    mimeType: string,
+    filename: string,
+    base64Data?: string | null
+  ): Promise<VerificationStepResult> {
+    const formData = await this.createFormDataWithFile(fileUri, mimeType, filename, 'file', base64Data);
 
     return this.request<VerificationStepResult>(
       '/api/v1/verification/college-id',
@@ -518,17 +626,18 @@ class ApiService {
         method: 'POST',
         body: formData,
       },
-      true
+      true,
+      60000
     );
   }
 
-  async enrollFace(fileUri: string, mimeType: string, filename: string): Promise<VerificationStepResult> {
-    const formData = new FormData();
-    formData.append('file', {
-      uri: fileUri,
-      type: mimeType,
-      name: filename,
-    } as any);
+  async enrollFace(
+    fileUri: string,
+    mimeType: string,
+    filename: string,
+    base64Data?: string | null
+  ): Promise<VerificationStepResult> {
+    const formData = await this.createFormDataWithFile(fileUri, mimeType, filename, 'file', base64Data);
 
     return this.request<VerificationStepResult>(
       '/api/v1/verification/face',
@@ -536,7 +645,8 @@ class ApiService {
         method: 'POST',
         body: formData,
       },
-      true
+      true,
+      60000
     );
   }
 
@@ -617,14 +727,10 @@ class ApiService {
   async uploadInternshipProof(
     fileUri: string,
     mimeType: string,
-    filename: string
+    filename: string,
+    base64Data?: string | null
   ): Promise<{ storage_ref: string; filename: string; content_type: string; url: string }> {
-    const formData = new FormData();
-    formData.append('file', {
-      uri: fileUri,
-      type: mimeType,
-      name: filename,
-    } as any);
+    const formData = await this.createFormDataWithFile(fileUri, mimeType, filename, 'file', base64Data);
 
     return this.request<{ storage_ref: string; filename: string; content_type: string; url: string }>(
       '/api/v1/internships/upload-proof',
@@ -632,7 +738,8 @@ class ApiService {
         method: 'POST',
         body: formData,
       },
-      true
+      true,
+      60000
     );
   }
 }
