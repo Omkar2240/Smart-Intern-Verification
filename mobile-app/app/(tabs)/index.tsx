@@ -24,6 +24,7 @@ import {
   StudentProfile,
   Internship,
   ShiftTask,
+  AttendanceRecordItem,
 } from '@/services/api';
 
 export default function HomeScreen() {
@@ -52,18 +53,22 @@ export default function HomeScreen() {
   const [currentTime, setCurrentTime] = useState({
     timeStr: '09:41',
     ampm: 'AM',
-    dateStr: 'TODAY, 24 OCT',
+    dateStr: `TODAY, ${new Date().getDate()} ${['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][new Date().getMonth()]}`,
   });
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [checkInTime, setCheckInTime] = useState<string | null>(null);
-  const [selectedMonth, setSelectedMonth] = useState('October');
+  const [selectedMonth, setSelectedMonth] = useState(
+    new Date().toLocaleString('en-US', { month: 'long' })
+  );
   const [showMonthModal, setShowMonthModal] = useState(false);
 
-  // Attendance Statistics
+  // Attendance Statistics & Records State
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecordItem[]>([]);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [stats, setStats] = useState({
-    present: '32',
-    late: '02',
-    absent: '01',
+    present: '00',
+    late: '00',
+    absent: '00',
   });
 
   // Shift & Compliance Tasks State
@@ -135,12 +140,133 @@ export default function HomeScreen() {
     }
   };
 
+  const MONTH_OPTIONS = [
+    'All Time',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+
+  const getRecordMonthName = (dateStr?: string | null): string => {
+    if (!dateStr) return '';
+    try {
+      const parts = dateStr.slice(0, 10).split('-');
+      if (parts.length === 3) {
+        const monthIdx = parseInt(parts[1], 10) - 1;
+        const monthNames = [
+          'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        if (monthIdx >= 0 && monthIdx < 12) {
+          return monthNames[monthIdx];
+        }
+      }
+      const d = new Date(dateStr);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleString('en-US', { month: 'long' });
+      }
+    } catch {
+      // ignore
+    }
+    return '';
+  };
+
+  const computeAttendanceStats = (records: AttendanceRecordItem[], monthFilter: string) => {
+    const filtered =
+      monthFilter === 'All Time'
+        ? records
+        : records.filter((r) => {
+            const m = getRecordMonthName(r.date);
+            return m.toLowerCase() === monthFilter.toLowerCase();
+          });
+
+    let present = 0;
+    let late = 0;
+    let absent = 0;
+
+    for (const r of filtered) {
+      const s = (r.status || '').toLowerCase();
+      if (s === 'late') {
+        late++;
+      } else if (s === 'absent') {
+        absent++;
+      } else {
+        present++;
+      }
+    }
+
+    return {
+      present: String(present).padStart(2, '0'),
+      late: String(late).padStart(2, '0'),
+      absent: String(absent).padStart(2, '0'),
+    };
+  };
+
+  const loadAttendanceData = async (targetMonth?: string) => {
+    const activeMonth = targetMonth || selectedMonth;
+    try {
+      setAttendanceLoading(true);
+      const data = await api.getAttendanceHistory();
+      const records = data?.records || [];
+      setAttendanceRecords(records);
+      setStats(computeAttendanceStats(records, activeMonth));
+
+      // Check if student has already checked in today
+      const now = new Date();
+      const localYear = now.getFullYear();
+      const localMonth = String(now.getMonth() + 1).padStart(2, '0');
+      const localDay = String(now.getDate()).padStart(2, '0');
+      const localTodayStr = `${localYear}-${localMonth}-${localDay}`;
+      const utcTodayStr = now.toISOString().slice(0, 10);
+
+      const todayRec = records.find(
+        (r) =>
+          r.date === localTodayStr ||
+          r.date === utcTodayStr ||
+          (r.check_in && (r.check_in.startsWith(localTodayStr) || r.check_in.startsWith(utcTodayStr)))
+      );
+
+      if (todayRec) {
+        setIsCheckedIn(true);
+        if (todayRec.check_in) {
+          try {
+            const d = new Date(todayRec.check_in);
+            let hours = d.getHours();
+            const minutes = d.getMinutes();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12;
+            const formattedHours = hours < 10 ? `0${hours}` : `${hours}`;
+            const formattedMinutes = minutes < 10 ? `0${minutes}` : `${minutes}`;
+            setCheckInTime(`${formattedHours}:${formattedMinutes} ${ampm}`);
+          } catch {
+            setCheckInTime(todayRec.check_in.slice(11, 16) || 'Today');
+          }
+        }
+      }
+    } catch {
+      // Graceful fallback: offline or identity pending
+    } finally {
+      setAttendanceLoading(false);
+    }
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
       const [profileData, activeIntern] = await Promise.all([
         api.getProfile().catch(() => null),
         api.getActiveInternship().catch(() => null),
+        loadAttendanceData(selectedMonth).catch(() => null),
         refreshUser().catch(() => null),
         refreshVerificationStatus().catch(() => null),
       ]);
@@ -402,6 +528,7 @@ export default function HomeScreen() {
         'Remote Check-In Verified! 💻',
         `Digital proof logged successfully.\nChecked in at ${timeStamp}.\nNo location or face verification required for remote internships.`
       );
+      loadAttendanceData();
     } catch (e: any) {
       Alert.alert('Check-In Failed', e.message || 'Could not complete remote check-in.');
     } finally {
@@ -517,6 +644,7 @@ export default function HomeScreen() {
         `Biometric identity verified (${faceVerifyResult.student_name || user?.name || 'Student'}).\nChecked in at ${timeStamp}.\n2 random 10-minute compliance verification tasks scheduled during your shift.`
       );
       checkActiveTask();
+      loadAttendanceData();
     } catch (e: any) {
       Alert.alert('Verification Failed', e.message || 'Could not complete on-site check-in.');
     } finally {
@@ -987,25 +1115,30 @@ export default function HomeScreen() {
           onPress={() => setShowMonthModal(false)}
         >
           <View style={styles.monthModalCard}>
-            <Text style={styles.modalTitle}>Select Attendance Month</Text>
-            {['August', 'September', 'October', 'November'].map((m) => (
-              <TouchableOpacity
-                key={m}
-                style={[styles.monthOption, selectedMonth === m && styles.selectedMonthOption]}
-                onPress={() => {
-                  setSelectedMonth(m);
-                  if (m === 'October') setStats({ present: '32', late: '02', absent: '01' });
-                  else if (m === 'September') setStats({ present: '28', late: '01', absent: '02' });
-                  else setStats({ present: '24', late: '00', absent: '01' });
-                  setShowMonthModal(false);
-                }}
-              >
-                <Text style={[styles.monthOptionText, selectedMonth === m && styles.selectedMonthOptionText]}>
-                  {m}
-                </Text>
-                {selectedMonth === m && <Ionicons name="checkmark-circle" size={18} color="#FFA500" />}
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Select Attendance Period</Text>
+              <TouchableOpacity onPress={() => setShowMonthModal(false)}>
+                <Ionicons name="close-circle" size={22} color="#9CA3AF" />
               </TouchableOpacity>
-            ))}
+            </View>
+            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+              {MONTH_OPTIONS.map((m) => (
+                <TouchableOpacity
+                  key={m}
+                  style={[styles.monthOption, selectedMonth === m && styles.selectedMonthOption]}
+                  onPress={() => {
+                    setSelectedMonth(m);
+                    setStats(computeAttendanceStats(attendanceRecords, m));
+                    setShowMonthModal(false);
+                  }}
+                >
+                  <Text style={[styles.monthOptionText, selectedMonth === m && styles.selectedMonthOptionText]}>
+                    {m}
+                  </Text>
+                  {selectedMonth === m && <Ionicons name="checkmark-circle" size={18} color="#FFA500" />}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
         </TouchableOpacity>
       </Modal>
