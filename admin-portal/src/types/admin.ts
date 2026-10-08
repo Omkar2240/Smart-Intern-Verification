@@ -327,6 +327,22 @@ export interface AnalyticsSummary {
   verified_internships?: number;
 }
 
+export interface TrendDataPoint {
+  date: string;
+  count: number;
+}
+
+export interface PlatformTrendData {
+  period: string;
+  user_registrations: TrendDataPoint[];
+  user_logins: TrendDataPoint[];
+  college_creations: TrendDataPoint[];
+}
+
+export interface PlatformTrendResponse {
+  data: PlatformTrendData;
+}
+
 // ─── Audit Logs ─────────────────────────────────────────────────────────────────
 
 export interface AuditLog {

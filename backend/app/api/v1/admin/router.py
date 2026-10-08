@@ -24,6 +24,7 @@ from app.schemas.admin import (
     AdminCollegeUpdate,
     AdminAnalyticsSummary,
     AdminRosterUploadResponse,
+    PlatformTrendResponse,
 )
 from app.schemas.college import CollegeResponse
 from app.services.admin_service import AdminService
@@ -308,6 +309,18 @@ async def get_analytics_summary(
     Retrieve verification KPIs and metrics for the admin dashboard.
     """
     return await AdminService.get_analytics_summary(db, current_admin)
+
+
+@router.get("/analytics/trends", response_model=PlatformTrendResponse)
+async def get_platform_trends(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_admin: Annotated[User, Depends(require_admin)],
+    period: Annotated[str, Query(description="Time period: today, monthly, yearly, all")] = "monthly",
+):
+    """
+    Retrieve platform trend data for user registrations, logins, and college creations.
+    """
+    return await AdminService.get_platform_trends(db, period)
 
 
 @router.post("/colleges", response_model=CollegeResponse, status_code=status.HTTP_201_CREATED)

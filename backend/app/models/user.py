@@ -4,8 +4,9 @@ User model — core identity table.
 
 import uuid
 from typing import Optional
+from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, ForeignKey, String, Uuid
+from sqlalchemy import JSON, Boolean, ForeignKey, String, Uuid, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
@@ -31,6 +32,9 @@ class User(Base, UUIDMixin, TimestampMixin):
     )
     permissions: Mapped[list[str]] = mapped_column(
         JSON, default=list, nullable=False
+    )
+    last_login: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     # Relationships

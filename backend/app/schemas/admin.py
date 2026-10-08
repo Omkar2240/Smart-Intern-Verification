@@ -305,3 +305,14 @@ class AdminSystemConfigUpdate(BaseModel):
     key: str = Field(..., min_length=1, max_length=100)
     value: dict
     description: str | None = Field(None, max_length=255)
+
+
+class PlatformTrendData(BaseModel):
+    period: str
+    user_registrations: list[dict]
+    user_logins: list[dict]
+    college_creations: list[dict]
+
+
+class PlatformTrendResponse(BaseModel):
+    data: PlatformTrendData

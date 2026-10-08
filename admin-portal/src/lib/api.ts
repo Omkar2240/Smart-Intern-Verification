@@ -37,6 +37,7 @@ import type {
   CreateStudentPayload,
   UpdateStudentPayload,
   AdminPermissionOption,
+  PlatformTrendResponse,
 } from "@/types/admin";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -213,6 +214,10 @@ class ApiClient {
 
   async getAnalyticsSummary(): Promise<AnalyticsSummary> {
     return this.request<AnalyticsSummary>("/admin/analytics/summary");
+  }
+
+  async getPlatformTrends(period: "today" | "monthly" | "yearly" | "all" = "monthly"): Promise<PlatformTrendResponse> {
+    return this.request<PlatformTrendResponse>(`/admin/analytics/trends?period=${period}`);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
