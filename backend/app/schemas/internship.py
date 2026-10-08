@@ -25,6 +25,7 @@ class InternshipBase(BaseModel):
     shift_start_time: str | None = None  # e.g. "09:00"
     shift_end_time: str | None = None    # e.g. "17:00"
     actual_hours_per_day: float | None = 8.0
+    hybrid_schedule: str | None = None   # JSON e.g. {"mon":"offline",...}
 
 
 class InternshipCreate(InternshipBase):
@@ -47,6 +48,7 @@ class InternshipUpdate(BaseModel):
     shift_start_time: str | None = None
     shift_end_time: str | None = None
     actual_hours_per_day: float | None = None
+    hybrid_schedule: str | None = None
     is_active: bool | None = None
 
 

@@ -39,6 +39,7 @@ class Internship(Base, UUIDMixin, TimestampMixin):
     shift_start_time: Mapped[str | None] = mapped_column(String(10), nullable=True)  # e.g. "09:00"
     shift_end_time: Mapped[str | None] = mapped_column(String(10), nullable=True)    # e.g. "17:00"
     actual_hours_per_day: Mapped[float | None] = mapped_column(nullable=True, default=8.0)
+    hybrid_schedule: Mapped[str | None] = mapped_column(String(512), nullable=True)  # JSON e.g. {"mon":"offline",...}
 
     # Verification workflow stages:
     # "submitted" -> "tp_review" -> "mentor_review" -> "verified" (or "rejected")

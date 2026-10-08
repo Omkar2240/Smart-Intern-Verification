@@ -25,8 +25,60 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { api, Internship, InternshipCreatePayload } from '@/services/api';
 import { useAuth } from '@/context/auth-context';
+import LocationPickerModal, { SelectedLocationResult } from '@/components/LocationPickerModal';
 
 type VerificationStage = 'submitted' | 'tp_review' | 'mentor_review' | 'verified' | 'rejected';
+
+export type DayOfWeek = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+export type DayMode = 'offline' | 'online';
+
+export interface WeeklySchedule {
+  mon: DayMode;
+  tue: DayMode;
+  wed: DayMode;
+  thu: DayMode;
+  fri: DayMode;
+  sat: DayMode;
+  sun: DayMode;
+}
+
+const DEFAULT_HYBRID_SCHEDULE: WeeklySchedule = {
+  mon: 'offline',
+  tue: 'offline',
+  wed: 'offline',
+  thu: 'online',
+  fri: 'online',
+  sat: 'online',
+  sun: 'online',
+};
+
+const DAYS_ORDER: { key: DayOfWeek; label: string; full: string }[] = [
+  { key: 'mon', label: 'Mon', full: 'Monday' },
+  { key: 'tue', label: 'Tue', full: 'Tuesday' },
+  { key: 'wed', label: 'Wed', full: 'Wednesday' },
+  { key: 'thu', label: 'Thu', full: 'Thursday' },
+  { key: 'fri', label: 'Fri', full: 'Friday' },
+  { key: 'sat', label: 'Sat', full: 'Saturday' },
+  { key: 'sun', label: 'Sun', full: 'Sunday' },
+];
+
+function formatHybridSummary(scheduleStr?: string | null): string {
+  if (!scheduleStr) return 'Custom Hybrid Schedule';
+  try {
+    const s = JSON.parse(scheduleStr) as WeeklySchedule;
+    const offlineDays: string[] = [];
+    const onlineDays: string[] = [];
+    DAYS_ORDER.forEach((d) => {
+      if (s[d.key] === 'offline') offlineDays.push(d.label);
+      else onlineDays.push(d.label);
+    });
+    if (offlineDays.length === 0) return 'All Online (Remote)';
+    if (onlineDays.length === 0) return 'All Offline (Office)';
+    return `${offlineDays.join(', ')} (Office) • ${onlineDays.join(', ')} (Remote)`;
+  } catch {
+    return 'Custom Hybrid Schedule';
+  }
+}
 
 export default function InternshipManagementScreen() {
   const router = useRouter();
@@ -41,12 +93,16 @@ export default function InternshipManagementScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // Location Picker Modal State (Free OSM API)
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+
   // Form Fields
   const [companyName, setCompanyName] = useState('');
   const [role, setRole] = useState('');
   const [department, setDepartment] = useState('');
   const [internshipType, setInternshipType] = useState<'on_site' | 'remote' | 'hybrid'>('on_site');
   const [location, setLocation] = useState('');
+  const [hybridSchedule, setHybridSchedule] = useState<WeeklySchedule>(DEFAULT_HYBRID_SCHEDULE);
   const [supervisorName, setSupervisorName] = useState('');
   const [supervisorEmail, setSupervisorEmail] = useState('');
   const [supervisorPhone, setSupervisorPhone] = useState('');
@@ -100,6 +156,7 @@ export default function InternshipManagementScreen() {
     setDepartment('');
     setInternshipType('on_site');
     setLocation('');
+    setHybridSchedule(DEFAULT_HYBRID_SCHEDULE);
     setSupervisorName('');
     setSupervisorEmail('');
     setSupervisorPhone('');
@@ -132,6 +189,15 @@ export default function InternshipManagementScreen() {
     setDepartment(item.department || '');
     setInternshipType(item.internship_type || 'on_site');
     setLocation(item.location || '');
+    if (item.hybrid_schedule) {
+      try {
+        setHybridSchedule(JSON.parse(item.hybrid_schedule));
+      } catch {
+        setHybridSchedule(DEFAULT_HYBRID_SCHEDULE);
+      }
+    } else {
+      setHybridSchedule(DEFAULT_HYBRID_SCHEDULE);
+    }
     setSupervisorName(item.supervisor_name || '');
     setSupervisorEmail(item.supervisor_email || '');
     setSupervisorPhone(item.supervisor_phone || '');
@@ -247,6 +313,10 @@ export default function InternshipManagementScreen() {
       setFormError('Job role / designation is required.');
       return;
     }
+    if (internshipType === 'on_site' && !location.trim()) {
+      setFormError('Office workplace location is required for on-site internships. Please pick a location from the map.');
+      return;
+    }
     if (!shiftStartTime.trim() || !shiftEndTime.trim()) {
       setFormError('Shift start time and end time are required (e.g. 09:00 - 17:00).');
       return;
@@ -264,7 +334,7 @@ export default function InternshipManagementScreen() {
       role: role.trim(),
       department: department.trim() || undefined,
       internship_type: internshipType,
-      location: location.trim() || undefined,
+      location: internshipType === 'remote' ? undefined : (location.trim() || undefined),
       supervisor_name: supervisorName.trim() || undefined,
       supervisor_email: supervisorEmail.trim() || undefined,
       supervisor_phone: supervisorPhone.trim() || undefined,
@@ -274,6 +344,7 @@ export default function InternshipManagementScreen() {
       shift_start_time: shiftStartTime.trim(),
       shift_end_time: shiftEndTime.trim(),
       actual_hours_per_day: actualHours.trim() ? parseFloat(actualHours.trim()) : undefined,
+      hybrid_schedule: internshipType === 'hybrid' ? JSON.stringify(hybridSchedule) : undefined,
       offer_letter_url: offerLetterUrl || undefined,
     };
 
@@ -641,11 +712,27 @@ export default function InternshipManagementScreen() {
 
                 {/* Details Grid */}
                 <View style={styles.detailsGrid}>
-                  {item.location && (
+                  {item.internship_type === 'remote' ? (
+                    <View style={styles.detailRow}>
+                      <Feather name="home" size={15} color="#059669" />
+                      <Text style={[styles.detailText, { color: '#059669', fontWeight: '600' }]}>
+                        Workplace: 100% Remote (Digital Verification)
+                      </Text>
+                    </View>
+                  ) : item.location ? (
                     <View style={styles.detailRow}>
                       <Ionicons name="location-outline" size={16} color="#6B7280" />
-                      <Text style={styles.detailText} numberOfLines={1}>
+                      <Text style={styles.detailText} numberOfLines={2}>
                         {item.location}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {item.internship_type === 'hybrid' && item.hybrid_schedule && (
+                    <View style={styles.detailRow}>
+                      <MaterialCommunityIcons name="calendar-sync" size={16} color="#4F46E5" />
+                      <Text style={[styles.detailText, { color: '#4F46E5', fontWeight: '600' }]} numberOfLines={2}>
+                        Schedule: {formatHybridSummary(item.hybrid_schedule)}
                       </Text>
                     </View>
                   )}
@@ -794,7 +881,9 @@ export default function InternshipManagementScreen() {
               />
 
               {/* Work Mode */}
-              <Text style={styles.inputLabel}>Workplace Mode</Text>
+              <Text style={styles.inputLabel}>
+                Workplace Mode <Text style={{ color: '#EF4444' }}>*</Text>
+              </Text>
               <View style={styles.segmentRow}>
                 {(['on_site', 'hybrid', 'remote'] as const).map((type) => (
                   <TouchableOpacity
@@ -814,15 +903,215 @@ export default function InternshipManagementScreen() {
                 ))}
               </View>
 
-              {/* Workplace Address */}
-              <Text style={styles.inputLabel}>Office Workplace Location</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="e.g. HQ Office, Block A, Cyber City, Pune"
-                placeholderTextColor="#9CA3AF"
-                value={location}
-                onChangeText={setLocation}
-              />
+              {/* ------------------------------------------------------------- */}
+              {/* HYBRID MODE: 7-Day Weekly Schedule Selector                   */}
+              {/* ------------------------------------------------------------- */}
+              {internshipType === 'hybrid' && (
+                <View style={styles.hybridScheduleContainer}>
+                  <View style={styles.hybridHeaderRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.hybridSectionTitle}>7-Day Weekly Hybrid Schedule</Text>
+                      <Text style={styles.hybridSectionSubtitle}>
+                        Choose on which days you report to office (Offline) and work from home (Online).
+                      </Text>
+                    </View>
+                    <View style={styles.scheduleBadge}>
+                      <Text style={styles.scheduleBadgeText}>
+                        🏢 {Object.values(hybridSchedule).filter((v) => v === 'offline').length} Office • 💻 {Object.values(hybridSchedule).filter((v) => v === 'online').length} Remote
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Quick Preset Buttons */}
+                  <View style={styles.presetButtonsRow}>
+                    <TouchableOpacity
+                      style={styles.quickPresetChip}
+                      onPress={() =>
+                        setHybridSchedule({
+                          mon: 'offline',
+                          tue: 'offline',
+                          wed: 'offline',
+                          thu: 'online',
+                          fri: 'online',
+                          sat: 'online',
+                          sun: 'online',
+                        })
+                      }
+                    >
+                      <Text style={styles.quickPresetText}>Mon-Wed Office</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.quickPresetChip}
+                      onPress={() =>
+                        setHybridSchedule({
+                          mon: 'offline',
+                          tue: 'offline',
+                          wed: 'offline',
+                          thu: 'offline',
+                          fri: 'offline',
+                          sat: 'online',
+                          sun: 'online',
+                        })
+                      }
+                    >
+                      <Text style={styles.quickPresetText}>Mon-Fri Office</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.quickPresetChip}
+                      onPress={() =>
+                        setHybridSchedule({
+                          mon: 'offline',
+                          tue: 'online',
+                          wed: 'offline',
+                          thu: 'online',
+                          fri: 'offline',
+                          sat: 'online',
+                          sun: 'online',
+                        })
+                      }
+                    >
+                      <Text style={styles.quickPresetText}>Alternate Days</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* 7 Days List with Toggle Buttons */}
+                  <View style={styles.daysListGrid}>
+                    {DAYS_ORDER.map((d) => {
+                      const mode = hybridSchedule[d.key];
+                      const isOffline = mode === 'offline';
+                      return (
+                        <View key={d.key} style={styles.dayScheduleRow}>
+                          <View style={styles.dayNameBox}>
+                            <Text style={styles.dayNameText}>{d.full}</Text>
+                          </View>
+                          <View style={styles.dayTogglesGroup}>
+                            <TouchableOpacity
+                              style={[styles.dayToggleBtn, isOffline && styles.dayToggleBtnActiveOffline]}
+                              onPress={() =>
+                                setHybridSchedule((prev) => ({ ...prev, [d.key]: 'offline' }))
+                              }
+                            >
+                              <Text
+                                style={[
+                                  styles.dayToggleBtnText,
+                                  isOffline && styles.dayToggleBtnTextActiveOffline,
+                                ]}
+                              >
+                                🏢 Office
+                              </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={[styles.dayToggleBtn, !isOffline && styles.dayToggleBtnActiveOnline]}
+                              onPress={() =>
+                                setHybridSchedule((prev) => ({ ...prev, [d.key]: 'online' }))
+                              }
+                            >
+                              <Text
+                                style={[
+                                  styles.dayToggleBtnText,
+                                  !isOffline && styles.dayToggleBtnTextActiveOnline,
+                                ]}
+                              >
+                                💻 Remote
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              {/* ------------------------------------------------------------- */}
+              {/* REMOTE MODE: Informational Card (Office location is hidden)   */}
+              {/* ------------------------------------------------------------- */}
+              {internshipType === 'remote' && (
+                <View style={styles.remoteNoticeBox}>
+                  <View style={styles.remoteNoticeIconCircle}>
+                    <Feather name="home" size={20} color="#059669" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.remoteNoticeTitle}>100% Remote Internship</Text>
+                    <Text style={styles.remoteNoticeSub}>
+                      Office workplace location is not required. Attendance verification uses daily sprint goals, GitHub commits, or IDE proof without physical geofencing.
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* ------------------------------------------------------------- */}
+              {/* ON-SITE & HYBRID: Office Workplace Location with Map Picker   */}
+              {/* ------------------------------------------------------------- */}
+              {internshipType !== 'remote' && (
+                <View style={styles.locationSection}>
+                  <View style={styles.locationLabelRow}>
+                    <Text style={styles.inputLabel}>
+                      Office Workplace Location{' '}
+                      {internshipType === 'on_site' ? (
+                        <Text style={{ color: '#EF4444' }}>* (Required)</Text>
+                      ) : (
+                        <Text style={{ color: '#6B7280' }}>(For offline days)</Text>
+                      )}
+                    </Text>
+                  </View>
+                  <Text style={styles.inputSubtext}>
+                    Used for GPS geofencing & biometric face check-in on office days.
+                  </Text>
+
+                  {/* Prominent Map Picker Action Button */}
+                  <TouchableOpacity
+                    style={styles.openMapBtn}
+                    onPress={() => setShowLocationPicker(true)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.openMapIconBox}>
+                      <Ionicons name="map" size={18} color="#D97706" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.openMapBtnTitle}>Pick Location from Map</Text>
+                      <Text style={styles.openMapBtnSub}>
+                        Country ➔ State ➔ City ➔ Exact Landmark (Free OpenStreetMap API)
+                      </Text>
+                    </View>
+                    <Feather name="chevron-right" size={18} color="#D97706" />
+                  </TouchableOpacity>
+
+                  {/* Selected Location Card or Input */}
+                  {location ? (
+                    <View style={styles.selectedAddressCard}>
+                      <View style={styles.selectedAddressHeader}>
+                        <View style={styles.verifiedPinBadge}>
+                          <Ionicons name="location-sharp" size={14} color="#059669" />
+                          <Text style={styles.verifiedPinText}>Location Selected</Text>
+                        </View>
+                        <TouchableOpacity onPress={() => setShowLocationPicker(true)}>
+                          <Text style={styles.changeAddressLink}>Change on Map</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={styles.selectedAddressContent}>{location}</Text>
+                      <TextInput
+                        style={styles.subBuildingInput}
+                        placeholder="Optional: Add Floor, Wing, or Desk (e.g. 4th Floor, Tower B)"
+                        placeholderTextColor="#9CA3AF"
+                        value={location}
+                        onChangeText={setLocation}
+                      />
+                    </View>
+                  ) : (
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="e.g. EON IT Park, Kharadi, Pune, Maharashtra, India"
+                      placeholderTextColor="#9CA3AF"
+                      value={location}
+                      onChangeText={setLocation}
+                    />
+                  )}
+                </View>
+              )}
 
               {/* Supervisor Info */}
               <View style={{ flexDirection: 'row', gap: 12 }}>
@@ -1019,6 +1308,16 @@ export default function InternshipManagementScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* OpenStreetMap Location Picker Modal */}
+      <LocationPickerModal
+        visible={showLocationPicker}
+        onClose={() => setShowLocationPicker(false)}
+        initialLocation={location}
+        onSelectLocation={(selected: SelectedLocationResult) => {
+          setLocation(selected.fullAddress);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -1771,5 +2070,234 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#D97706',
     fontWeight: '600',
+  },
+  // Hybrid Schedule Styles
+  hybridScheduleContainer: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  hybridHeaderRow: {
+    marginBottom: 10,
+  },
+  hybridSectionTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  hybridSectionSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+    marginBottom: 6,
+  },
+  scheduleBadge: {
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+  },
+  scheduleBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#4338CA',
+  },
+  presetButtonsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
+  },
+  quickPresetChip: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  quickPresetText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  daysListGrid: {
+    gap: 6,
+  },
+  dayScheduleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  dayNameBox: {
+    width: 90,
+  },
+  dayNameText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  dayTogglesGroup: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 6,
+  },
+  dayToggleBtn: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: 6,
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+  },
+  dayToggleBtnActiveOffline: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  dayToggleBtnActiveOnline: {
+    backgroundColor: '#DBEAFE',
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  dayToggleBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  dayToggleBtnTextActiveOffline: {
+    color: '#B45309',
+    fontWeight: '800',
+  },
+  dayToggleBtnTextActiveOnline: {
+    color: '#1D4ED8',
+    fontWeight: '800',
+  },
+  // Remote Notice Styles
+  remoteNoticeBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 12,
+    padding: 12,
+    gap: 12,
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  remoteNoticeIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#D1FAE5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  remoteNoticeTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#065F46',
+  },
+  remoteNoticeSub: {
+    fontSize: 11,
+    color: '#047857',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  // Location Section & Map Picker Styles
+  locationSection: {
+    marginBottom: 12,
+  },
+  locationLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  openMapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1.5,
+    borderColor: '#FCD34D',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 6,
+    marginBottom: 8,
+    gap: 10,
+  },
+  openMapIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  openMapBtnTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  openMapBtnSub: {
+    fontSize: 11,
+    color: '#B45309',
+    marginTop: 1,
+  },
+  selectedAddressCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 10,
+  },
+  selectedAddressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  verifiedPinBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  verifiedPinText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  changeAddressLink: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#D97706',
+  },
+  selectedAddressContent: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1E293B',
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  subBuildingInput: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    fontSize: 12,
+    color: '#1E293B',
   },
 });

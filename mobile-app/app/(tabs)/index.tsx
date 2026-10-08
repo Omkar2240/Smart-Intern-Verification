@@ -319,12 +319,40 @@ export default function HomeScreen() {
       return;
     }
 
-    // 2. Branch: Remote vs On-Site
+    // 2. Branch: Remote vs Hybrid vs On-Site
     if (internship.internship_type === 'remote') {
       // REMOTE: Skip location and face verification entirely!
       setRemoteProofText('');
       setRemoteProofImage(null);
       setShowRemoteModal(true);
+    } else if (internship.internship_type === 'hybrid') {
+      // HYBRID: Check today's scheduled mode in the 7-day schedule
+      const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+      const todayKey = dayKeys[new Date().getDay()];
+      let todayMode: 'offline' | 'online' = 'offline';
+
+      if (internship.hybrid_schedule) {
+        try {
+          const schedule = JSON.parse(internship.hybrid_schedule);
+          if (schedule[todayKey] === 'online') {
+            todayMode = 'online';
+          }
+        } catch {
+          todayMode = 'offline';
+        }
+      }
+
+      if (todayMode === 'online') {
+        // Today is a Remote / Online day in the Hybrid schedule
+        setRemoteProofText('');
+        setRemoteProofImage(null);
+        setShowRemoteModal(true);
+      } else {
+        // Today is an Office / Offline day in the Hybrid schedule
+        setOfflineSelfieUri(null);
+        setOfflineSelfieBase64(null);
+        setShowOfflineModal(true);
+      }
     } else {
       // OFFLINE / ON-SITE: Location and Face Verification
       setOfflineSelfieUri(null);
