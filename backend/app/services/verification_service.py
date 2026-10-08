@@ -91,7 +91,9 @@ class VerificationService:
 
         user = await db.get(User, user_id)
         current_step = record.current_step
-        if record.college_status == COLLEGE_STATUS[1] and not user.department_id:
+        if record.college_status == COLLEGE_STATUS[1] and (
+            user is None or not user.department_id
+        ):
             current_step = "department_selection"
 
         return VerificationStatusResponse(
@@ -115,6 +117,13 @@ class VerificationService:
         college_id: uuid.UUID,
     ) -> IdentityVerification:
         """Select the user's college."""
+        record = await self.get_or_create_verification(db, user_id)
+        if record.overall_status in ("verified", "manual_review") or record.current_step == "completed":
+            raise VerificationServiceError(
+                "Identity verification is already completed for your account.",
+                status_code=400,
+            )
+
         # Validate college
         college_stmt = select(College).where(College.id == college_id, College.is_active.is_(True))
         college_res = await db.execute(college_stmt)
@@ -122,8 +131,6 @@ class VerificationService:
 
         if not college:
             raise VerificationServiceError("Selected college does not exist or is inactive.", status_code=404)
-
-        record = await self.get_or_create_verification(db, user_id)
 
         record.college_id = college.id
         record.college_status = COLLEGE_STATUS[1]  # selected
@@ -183,6 +190,12 @@ class VerificationService:
     ) -> Tuple[IdentityVerification, dict]:
         """Validate and verify college ID document."""
         record = await self.get_or_create_verification(db, user.id)
+
+        if record.overall_status in ("verified", "manual_review") or record.current_step == "completed" or user.is_verified:
+            raise VerificationServiceError(
+                "Identity verification is already completed for your account.",
+                status_code=400,
+            )
 
         if record.college_status != COLLEGE_STATUS[1] or not record.college_id:  # selected
             raise VerificationServiceError(
@@ -251,6 +264,12 @@ class VerificationService:
     ) -> IdentityVerification:
         """Run face detection, quality, liveness, and store ArcFace embedding."""
         record = await self.get_or_create_verification(db, user.id)
+
+        if record.overall_status in ("verified", "manual_review") or record.current_step == "completed" or user.is_verified:
+            raise VerificationServiceError(
+                "Identity verification is already completed for your account.",
+                status_code=400,
+            )
 
         if record.college_id_status not in (COLLEGE_ID_STATUS[2], COLLEGE_ID_STATUS[4]):  # verified, manual_review
             raise VerificationServiceError(

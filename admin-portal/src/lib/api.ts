@@ -50,8 +50,19 @@ const TOKEN_KEY = "trackintern_admin_token";
 
 // ─── Utility: Build query string ──────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildQuery(params: any): string {
+export function extractErrorMessage(errorData: unknown, fallback: string): string {
+  if (!errorData) return fallback;
+  if (typeof errorData === "string") return errorData;
+  if (typeof errorData !== "object") return fallback;
+
+  const data = errorData as { detail?: unknown; message?: unknown; error?: unknown };
+  if (typeof data.detail === "string") return data.detail;
+  if (typeof data.message === "string") return data.message;
+  if (typeof data.error === "string") return data.error;
+  return fallback;
+}
+
+function buildQuery(params: Record<string, unknown>): string {
   const q = new URLSearchParams();
   for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
     if (value === undefined || value === null || value === "" || value === "all") continue;
@@ -127,8 +138,8 @@ class ApiClient {
     if (!response.ok) {
       let errorMessage = `HTTP ${response.status}`;
       try {
-        const errData = await response.json();
-        errorMessage = errData.detail || errData.message || errorMessage;
+        const errorData = await response.json();
+        errorMessage = extractErrorMessage(errorData, errorMessage);
       } catch {
         // ignore parse error
       }
@@ -217,7 +228,9 @@ class ApiClient {
   }
 
   async getPlatformTrends(period: "today" | "monthly" | "yearly" | "all" = "monthly"): Promise<PlatformTrendResponse> {
-    return this.request<PlatformTrendResponse>(`/admin/analytics/trends?period=${period}`);
+    return this.request<PlatformTrendResponse>(
+      `/admin/analytics/trends${buildQuery({ period })}`
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────────

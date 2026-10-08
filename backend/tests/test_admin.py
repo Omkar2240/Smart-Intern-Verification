@@ -95,6 +95,7 @@ async def test_admin_student_create_and_update_with_role_scoping(
     assert created["college_id"] == str(college.id)
     assert created["department_id"] == str(department.id)
     assert created["registration_number"] == "SC-001"
+    assert created["role"] == "student"
 
     update_response = await client.patch(
         f"/api/v1/admin/students/{created['id']}",
@@ -741,3 +742,28 @@ async def test_admin_attendance_endpoints(client: AsyncClient, db_session: Async
     )
     assert analytics.status_code == 200
     assert analytics.json()["average_attendance_rate"] == 0
+
+
+@pytest.mark.asyncio
+async def test_admin_get_card_image_fallback(client: AsyncClient, db_session: AsyncSession):
+    """Test admin card image fallback when no uploaded image is available."""
+    _, admin_token = await create_admin_user(db_session, role="college_admin")
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    student_data = {
+        "name": "Card Image Test Student",
+        "email": "card_test@example.com",
+        "registration_number": "CARD_REG_001",
+        "mobile_number": "9811122233",
+        "password": "StrongPassword@123",
+    }
+    registration = await register_user(client, user_data=student_data)
+    student_id = registration["user"]["id"]
+
+    response = await client.get(
+        f"/api/v1/admin/verifications/{student_id}/card-image",
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    assert "svg" in response.headers.get("content-type", "")
+    assert b"<svg" in response.content
