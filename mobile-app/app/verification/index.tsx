@@ -236,7 +236,7 @@ export default function VerificationHubScreen() {
             activeOpacity={0.8}
           >
             <View style={styles.stepIconWrap}>
-              {verificationStatus?.college_verified && verificationStatus?.current_step !== 'department_selection' ? (
+              {(verificationStatus?.department_verified || Boolean(verificationStatus?.department_name)) ? (
                 <View style={[styles.stepIconBadge, styles.stepIconDone]}>
                   <Ionicons name="checkmark" size={20} color="#FFFFFF" />
                 </View>
@@ -263,8 +263,8 @@ export default function VerificationHubScreen() {
                 <Text style={styles.stepTitle}>Select Department</Text>
               </View>
               <Text style={styles.stepDesc}>
-                {verificationStatus?.current_step !== 'department_selection'
-                  ? 'Department selected'
+                {verificationStatus?.department_name
+                  ? verificationStatus.department_name
                   : 'Select the department for your college'}
               </Text>
             </View>

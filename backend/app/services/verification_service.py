@@ -91,6 +91,17 @@ class VerificationService:
 
         user = await db.get(User, user_id)
         current_step = record.current_step
+        department_id = None
+        department_name = None
+        department_verified = False
+
+        if user and user.department_id:
+            dept = await db.get(Department, user.department_id)
+            if dept:
+                department_id = dept.id
+                department_name = dept.name
+                department_verified = True
+
         if record.college_status == COLLEGE_STATUS[1] and (
             user is None or not user.department_id
         ):
@@ -102,6 +113,9 @@ class VerificationService:
             college_id=record.college_id,
             college_name=college_name,
             college_verified=record.college_status == COLLEGE_STATUS[1],  # selected
+            department_id=department_id,
+            department_name=department_name,
+            department_verified=department_verified,
             college_id_verified=record.college_id_status in (COLLEGE_ID_STATUS[2], COLLEGE_ID_STATUS[4]),  # verified, manual_review
             college_id_status=record.college_id_status,
             face_verified=record.face_status == FACE_STATUS[2],  # verified

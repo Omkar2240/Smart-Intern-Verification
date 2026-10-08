@@ -475,7 +475,7 @@ export function ReviewDrawer({
                     </tr>
                     <tr>
                       <td className="p-3 text-slate-500 font-sans font-medium">Department</td>
-                      <td className="p-3 text-slate-400">—</td>
+                      <td className="p-3 font-bold text-slate-900">{item.department_name || "—"}</td>
                       <td className="p-3 text-sky-700 font-bold">
                         {fields.department || "—"}
                       </td>

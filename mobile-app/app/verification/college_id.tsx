@@ -180,6 +180,18 @@ export default function CollegeIdScreen() {
       return;
     }
 
+    if (!verificationStatus?.department_name && !verificationStatus?.department_id) {
+      Alert.alert(
+        'Department Required',
+        'Please select your college and department before uploading your college ID card.',
+        [
+          { text: 'Select Department', onPress: () => router.push('/verification/college' as any) },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
+
     setSubmitting(true);
     setErrorMessage(null);
     try {
@@ -196,7 +208,18 @@ export default function CollegeIdScreen() {
       const msg = e?.message || 'The uploaded card could not be verified. Please check the guidelines and try again.';
       setErrorMessage(msg);
       setStatusResult('rejected');
-      Alert.alert('Verification Failed', msg);
+      if (msg.toLowerCase().includes('department')) {
+        Alert.alert(
+          'Department Required',
+          msg,
+          [
+            { text: 'Select Department', onPress: () => router.push('/verification/college' as any) },
+            { text: 'Dismiss', style: 'cancel' },
+          ]
+        );
+      } else {
+        Alert.alert('Verification Failed', msg);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -220,15 +243,34 @@ export default function CollegeIdScreen() {
           Real-time document scanner. Align your student ID inside the frame. The border will turn green when ready to capture.
         </Text>
 
-        {/* Selected College Pill */}
-        {verificationStatus?.college_name && (
-          <View style={styles.collegePill}>
-            <Ionicons name="school-outline" size={16} color="#B45309" />
-            <Text style={styles.collegePillText} numberOfLines={1}>
-              {verificationStatus.college_name}
-            </Text>
-          </View>
-        )}
+        {/* Selected College & Department Badges */}
+        <View style={styles.metaPillsRow}>
+          {verificationStatus?.college_name && (
+            <View style={styles.collegePill}>
+              <Ionicons name="school-outline" size={15} color="#B45309" />
+              <Text style={styles.collegePillText} numberOfLines={1}>
+                {verificationStatus.college_name}
+              </Text>
+            </View>
+          )}
+          {verificationStatus?.department_name ? (
+            <View style={styles.departmentPill}>
+              <Feather name="book-open" size={14} color="#0284C7" />
+              <Text style={styles.departmentPillText} numberOfLines={1}>
+                {verificationStatus.department_name}
+              </Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.missingDeptPill}
+              onPress={() => router.push('/verification/college' as any)}
+            >
+              <Ionicons name="alert-circle-outline" size={14} color="#DC2626" />
+              <Text style={styles.missingDeptPillText}>Select Department</Text>
+              <Feather name="chevron-right" size={12} color="#DC2626" />
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Viewfinder Container */}
         <View style={styles.viewfinderSection}>
@@ -515,21 +557,57 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 16,
   },
+  metaPillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
   collegePill: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
     backgroundColor: '#FEF3C7',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 12,
-    marginBottom: 20,
-    gap: 8,
+    maxWidth: '100%',
   },
   collegePillText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
     color: '#B45309',
-    flex: 1,
+  },
+  departmentPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    maxWidth: '100%',
+  },
+  departmentPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0369A1',
+  },
+  missingDeptPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  missingDeptPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#DC2626',
   },
   viewfinderSection: {
     alignItems: 'center',

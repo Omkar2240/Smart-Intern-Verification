@@ -47,6 +47,8 @@ export interface VerificationItem {
   mobile_number: string;
   college_id?: string | null;
   college_name?: string | null;
+  department_id?: string | null;
+  department_name?: string | null;
   college_status: string;
   college_id_status: VerificationStatus;
   face_status: VerificationStatus;

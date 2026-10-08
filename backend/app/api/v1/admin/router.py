@@ -43,6 +43,7 @@ async def list_verifications(
     status_filter: Annotated[str | None, Query(alias="status", description="Status filter: manual_review, verified, rejected, pending, all")] = None,
     search: Annotated[str | None, Query(description="Search by student name, email, or registration number")] = None,
     college_id: Annotated[UUID | None, Query(description="Filter by college UUID")] = None,
+    department_id: Annotated[UUID | None, Query(description="Filter by department UUID")] = None,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     page_size: Annotated[int, Query(ge=1, le=100, description="Page size")] = 20,
 ):
@@ -54,6 +55,7 @@ async def list_verifications(
         status_filter=status_filter,
         search=search,
         college_id=college_id,
+        department_id=department_id,
         page=page,
         page_size=page_size,
         admin_user=current_admin,

@@ -233,9 +233,15 @@ export function VerificationsClient({ initialData }: Props) {
                           </p>
                         </td>
                         <td className="py-3.5 px-4 text-slate-700 font-medium">
-                          <p className="text-[11px] line-clamp-1">
+                          <p className="text-[11px] font-semibold text-slate-900 line-clamp-1">
                             {item.college_name || "—"}
                           </p>
+                          {item.department_name && (
+                            <p className="text-[10px] text-slate-500 font-mono line-clamp-1 mt-0.5 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" />
+                              {item.department_name}
+                            </p>
+                          )}
                         </td>
                         <td className="py-3.5 px-4">
                           <VerificationStatusBadge status={item.college_id_status} />

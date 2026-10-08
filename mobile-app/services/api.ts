@@ -110,6 +110,9 @@ export interface VerificationStatus {
   college_id: string | null;
   college_name: string | null;
   college_verified: boolean;
+  department_id?: string | null;
+  department_name?: string | null;
+  department_verified?: boolean;
   college_id_verified: boolean;
   college_id_status: 'not_started' | 'pending' | 'verified' | 'rejected' | 'manual_review';
   face_verified: boolean;

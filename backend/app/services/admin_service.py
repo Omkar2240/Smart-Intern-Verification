@@ -88,6 +88,7 @@ class AdminService:
         status_filter: str | None = None,
         search: str | None = None,
         college_id: UUID | None = None,
+        department_id: UUID | None = None,
         page: int = 1,
         page_size: int = 20,
         admin_user: User | None = None,
@@ -102,6 +103,7 @@ class AdminService:
             .options(
                 selectinload(IdentityVerification.user).selectinload(User.face_embeddings),
                 selectinload(IdentityVerification.user).selectinload(User.internships),
+                selectinload(IdentityVerification.user).selectinload(User.department),
                 selectinload(IdentityVerification.college),
             )
         )
@@ -133,6 +135,9 @@ class AdminService:
                     IdentityVerification.college_id == college_id,
                 )
             )
+
+        if department_id:
+            conditions.append(User.department_id == department_id)
 
         if search:
             search_pattern = f"%{search}%"
@@ -183,6 +188,8 @@ class AdminService:
                     is_verified=bool(r.user.is_verified),
                     college_id=r.college_id,
                     college_name=r.college.name if r.college else None,
+                    department_id=r.user.department_id,
+                    department_name=r.user.department.name if r.user.department else None,
                     college_status=r.college_status,
                     college_id_status=r.college_id_status,
                     face_status=r.face_status,
@@ -213,6 +220,7 @@ class AdminService:
                 selectinload(IdentityVerification.user).selectinload(User.face_embeddings),
                 selectinload(IdentityVerification.user).selectinload(User.internships),
                 selectinload(IdentityVerification.user).selectinload(User.profile),
+                selectinload(IdentityVerification.user).selectinload(User.department),
                 selectinload(IdentityVerification.college),
             )
         )

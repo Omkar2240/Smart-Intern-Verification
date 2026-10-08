@@ -19,6 +19,8 @@ class AdminVerificationItem(BaseModel):
     is_verified: bool = False
     college_id: UUID | None = None
     college_name: str | None = None
+    department_id: UUID | None = None
+    department_name: str | None = None
     college_status: str
     college_id_status: str
     face_status: str

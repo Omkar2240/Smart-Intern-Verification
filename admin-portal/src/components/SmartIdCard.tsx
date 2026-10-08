@@ -24,7 +24,7 @@ export function SmartIdCard({ item, className = "", imageUrl = null }: SmartIdCa
 
   const metadata = item.extracted_metadata || {};
   const fields = metadata.fields || {};
-  const department = fields.department || "Computer Engineering / Technology";
+  const department = item.department_name || fields.department || "Computer Engineering / Technology";
   const validUntil = fields.valid_until || "Academic Session 2023 - 2027";
   const collegeName = item.college_name || fields.college_name || "G. H. Raisoni College of Engineering, Nagpur";
   const studentName = item.user_name || fields.student_name || "Enrolled Student";

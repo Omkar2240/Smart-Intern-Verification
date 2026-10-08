@@ -14,6 +14,9 @@ class VerificationStatusResponse(BaseModel):
     college_id: UUID | None = None
     college_name: str | None = None
     college_verified: bool
+    department_id: UUID | None = None
+    department_name: str | None = None
+    department_verified: bool = False
     college_id_verified: bool
     college_id_status: str
     face_verified: bool

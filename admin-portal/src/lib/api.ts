@@ -50,19 +50,7 @@ const TOKEN_KEY = "trackintern_admin_token";
 
 // ─── Utility: Build query string ──────────────────────────────────────────────
 
-export function extractErrorMessage(errorData: unknown, fallback: string): string {
-  if (!errorData) return fallback;
-  if (typeof errorData === "string") return errorData;
-  if (typeof errorData !== "object") return fallback;
-
-  const data = errorData as { detail?: unknown; message?: unknown; error?: unknown };
-  if (typeof data.detail === "string") return data.detail;
-  if (typeof data.message === "string") return data.message;
-  if (typeof data.error === "string") return data.error;
-  return fallback;
-}
-
-function buildQuery(params: Record<string, unknown>): string {
+function buildQuery(params: object): string {
   const q = new URLSearchParams();
   for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
     if (value === undefined || value === null || value === "" || value === "all") continue;
