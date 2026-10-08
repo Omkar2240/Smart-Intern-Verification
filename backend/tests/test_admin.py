@@ -416,3 +416,25 @@ async def test_admin_internship_management_and_force_verify(client: AsyncClient,
     assert resp_me.status_code == 200
     assert resp_me.json()["is_verified"] is True
 
+
+@pytest.mark.asyncio
+async def test_admin_get_card_image_fallback(client: AsyncClient, db_session: AsyncSession):
+    """Test admin fetching card image returns valid SVG badge even if disk scan is unavailable."""
+    _, admin_token = await create_admin_user(db_session, role="college_admin")
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    student_data = {
+        "name": "Card Image Test Student",
+        "email": "card_test@example.com",
+        "registration_number": "CARD_REG_001",
+        "mobile_number": "9811122233",
+        "password": "StrongPassword@123",
+    }
+    reg = await register_user(client, user_data=student_data)
+    student_id = reg["user"]["id"]
+
+    resp = await client.get(f"/api/v1/admin/verifications/{student_id}/card-image", headers=admin_headers)
+    assert resp.status_code == 200
+    assert "svg" in resp.headers.get("content-type", "")
+    assert b"<svg" in resp.content
+

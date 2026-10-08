@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 
-from sqlalchemy import select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -99,6 +99,11 @@ class VerificationService:
         college_id: uuid.UUID,
     ) -> IdentityVerification:
         """Select college for the user."""
+        record = await self.get_or_create_verification(db, user_id)
+
+        if record.overall_status in ("verified", "manual_review") or record.current_step == "completed":
+            raise VerificationServiceError("Identity verification is already completed for your account.", status_code=400)
+
         # Validate college
         college_stmt = select(College).where(College.id == college_id, College.is_active.is_(True))
         college_res = await db.execute(college_stmt)
@@ -106,8 +111,6 @@ class VerificationService:
 
         if not college:
             raise VerificationServiceError("Selected college does not exist or is inactive.", status_code=404)
-
-        record = await self.get_or_create_verification(db, user_id)
 
         record.college_id = college.id
         record.college_status = "selected"
@@ -128,6 +131,9 @@ class VerificationService:
     ) -> Tuple[IdentityVerification, dict]:
         """Validate and verify college ID document."""
         record = await self.get_or_create_verification(db, user.id)
+
+        if record.overall_status in ("verified", "manual_review") or record.current_step == "completed" or user.is_verified:
+            raise VerificationServiceError("Identity verification is already completed for your account.", status_code=400)
 
         if record.college_status != "selected" or not record.college_id:
             raise VerificationServiceError(
@@ -161,6 +167,32 @@ class VerificationService:
                 status_code=400,
             )
 
+        # Check if roll number from card or user is already verified with another user
+        detected_roll = verif_result.extracted_fields.get("detected_roll_number")
+        conditions = [func.lower(User.registration_number) == user.registration_number.lower()]
+        if detected_roll and len(str(detected_roll).strip()) >= 3:
+            conditions.append(func.lower(User.registration_number) == str(detected_roll).lower().strip())
+
+        other_verified_stmt = (
+            select(User)
+            .join(IdentityVerification, IdentityVerification.user_id == User.id)
+            .where(
+                User.id != user.id,
+                IdentityVerification.overall_status == "verified",
+                or_(*conditions),
+            )
+        )
+        existing_other = (await db.execute(other_verified_stmt)).scalars().first()
+        if existing_other:
+            record.college_id_status = "rejected"
+            record.rejection_reason = "This student registration / roll number is already verified with another user account."
+            record.extracted_metadata = verif_result.extracted_fields
+            await db.commit()
+            raise VerificationServiceError(
+                "This college credential is already verified with another user account. Duplicate credentials are not permitted.",
+                status_code=409,
+            )
+
         # Save file securely to local storage
         storage_ref = await self.storage.save_file(
             file_content=file_bytes,
@@ -192,6 +224,9 @@ class VerificationService:
         """Run face detection, quality, liveness, and store ArcFace embedding."""
         record = await self.get_or_create_verification(db, user.id)
 
+        if record.overall_status in ("verified", "manual_review") or record.current_step == "completed" or user.is_verified:
+            raise VerificationServiceError("Identity verification is already completed for your account.", status_code=400)
+
         if record.college_id_status not in ("verified", "manual_review"):
             raise VerificationServiceError(
                 "Please complete and submit your college ID verification before face enrollment.",
@@ -205,6 +240,32 @@ class VerificationService:
             record.rejection_reason = str(e)
             await db.commit()
             raise VerificationServiceError(str(e), status_code=400)
+
+        # Check against all active embeddings of other users for duplicate face (1:N biometric search)
+        other_embeddings_stmt = select(FaceEmbedding).where(
+            FaceEmbedding.user_id != user.id,
+            FaceEmbedding.is_active.is_(True),
+        )
+        other_embeddings_res = await db.execute(other_embeddings_stmt)
+        other_embeddings = other_embeddings_res.scalars().all()
+
+        for existing_emb in other_embeddings:
+            is_match, score = self.face_service.recognizer.is_match(
+                face_result.embedding_bytes,
+                existing_emb.embedding,
+                threshold=0.68,
+            )
+            if is_match:
+                record.face_status = "rejected"
+                record.rejection_reason = (
+                    "This biometric face is already registered to another user account. "
+                    "Each person can only have one verified account."
+                )
+                await db.commit()
+                raise VerificationServiceError(
+                    "This face is already registered with another user account. Multiple accounts for the same person are not permitted.",
+                    status_code=409,
+                )
 
         # Deactivate any previous embeddings for this user
         await db.execute(

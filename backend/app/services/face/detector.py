@@ -64,6 +64,15 @@ class FaceDetector:
             except Exception as e:
                 print(f"[WARN] Failed to load YuNet: {e}")
 
+        # Haar cascade fallback (if supported by cv2 build)
+        self.cascade_path = os.path.join(weights_dir, "haarcascade_frontalface_default.xml")
+        self.cascade = None
+        if hasattr(cv2, "CascadeClassifier") and os.path.exists(self.cascade_path):
+            try:
+                self.cascade = cv2.CascadeClassifier(self.cascade_path)
+            except Exception as e:
+                print(f"[WARN] Failed to load Haar Cascade: {e}")
+
     def detect_face(
         self,
         image_bgr: np.ndarray,
@@ -81,10 +90,33 @@ class FaceDetector:
 
         faces = []
         if self.net is not None:
-            self.net.setInputSize((w, h))
-            _, raw_faces = self.net.detect(image_bgr)
-            if raw_faces is not None and len(raw_faces) > 0:
-                faces = raw_faces
+            try:
+                self.net.setInputSize((w, h))
+                _, raw_faces = self.net.detect(image_bgr)
+                if raw_faces is not None and len(raw_faces) > 0:
+                    faces = raw_faces
+            except Exception as e:
+                print(f"[WARN] YuNet detection error: {e}")
+
+        # Fallback to Haar Cascade if YuNet detected 0 faces
+        if len(faces) == 0 and self.cascade is not None:
+            try:
+                gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+                gray_eq = cv2.equalizeHist(gray)
+                min_dim = int(min(w, h) * 0.12)
+                rects = self.cascade.detectMultiScale(
+                    gray_eq,
+                    scaleFactor=1.1,
+                    minNeighbors=5,
+                    minSize=(min_dim, min_dim),
+                )
+                if len(rects) > 0:
+                    faces = [
+                        [float(rx), float(ry), float(rw), float(rh), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.85]
+                        for rx, ry, rw, rh in rects
+                    ]
+            except Exception as e:
+                print(f"[WARN] Haar cascade fallback error: {e}")
 
         if len(faces) == 0:
             raise FaceNotDetectedError(

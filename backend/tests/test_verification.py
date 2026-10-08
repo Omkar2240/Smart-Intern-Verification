@@ -124,3 +124,111 @@ async def test_verification_workflow(client: AsyncClient, db_session: AsyncSessi
     final_data = resp_final.json()
     assert final_data["face_verified"] is True
     assert final_data["current_step"] == "completed"
+
+    # 6. Multiples guard: Already verified user cannot re-select college, re-upload ID, or re-enroll face
+    resp_reselect = await client.post(
+        "/api/v1/verification/college",
+        json={"college_id": str(college.id)},
+        headers=headers,
+    )
+    assert resp_reselect.status_code == 400
+    assert "already completed" in resp_reselect.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_duplicate_face_rejected(client: AsyncClient, db_session: AsyncSession):
+    """
+    Ensure that if another user tries to enroll with an existing registered user's face,
+    the system detects 1:N duplicate face match and rejects with HTTP 409.
+    """
+    from unittest.mock import patch
+    import numpy as np
+    from app.services.face.recognizer import recognizer
+    from app.services.face.service import FaceEnrollmentResult
+
+    # User 1 registers and verifies face
+    reg1 = await register_user(
+        client,
+        {
+            "name": "Original User",
+            "email": "orig.user@example.com",
+            "registration_number": "2026ORIG001",
+            "mobile_number": "9998881111",
+            "password": "StrongPassword@123",
+        },
+    )
+    token1 = reg1["access_token"]
+    headers1 = {"Authorization": f"Bearer {token1}"}
+
+    college = College(
+        name="Raisoni Institute of Information Tech",
+        city="Nagpur",
+        state="Maharashtra",
+        country="India",
+        code="RIIT",
+        is_active=True,
+    )
+    db_session.add(college)
+    await db_session.commit()
+    await db_session.refresh(college)
+
+    await client.post("/api/v1/verification/college", json={"college_id": str(college.id)}, headers=headers1)
+    await client.post(
+        "/api/v1/verification/college-id",
+        files={"file": ("id1.jpg", create_dummy_id_card(student_name="Original User"), "image/jpeg")},
+        headers=headers1,
+    )
+
+    # Standard deterministic embedding for Face A
+    rng = np.random.default_rng(999)
+    emb_a = rng.normal(0, 1, 512).astype(np.float32)
+    emb_a /= np.linalg.norm(emb_a)
+    emb_bytes_a = recognizer.embedding_to_bytes(emb_a)
+
+    mock_res_a = FaceEnrollmentResult(
+        embedding_bytes=emb_bytes_a,
+        quality_score=0.95,
+        liveness_score=0.92,
+        bbox=(50, 50, 150, 150),
+        model_name="ArcFace",
+        model_version="1.0",
+    )
+
+    with patch("app.services.verification_service.face_service.process_face_image", return_value=mock_res_a):
+        resp1 = await client.post(
+            "/api/v1/verification/face",
+            files={"file": ("face1.jpg", create_dummy_id_card(), "image/jpeg")},
+            headers=headers1,
+        )
+        assert resp1.status_code == 200
+
+    # User 2 registers new account
+    reg2 = await register_user(
+        client,
+        {
+            "name": "Second User",
+            "email": "second.user@example.com",
+            "registration_number": "2026SEC002",
+            "mobile_number": "9998882222",
+            "password": "StrongPassword@123",
+        },
+    )
+    token2 = reg2["access_token"]
+    headers2 = {"Authorization": f"Bearer {token2}"}
+
+    await client.post("/api/v1/verification/college", json={"college_id": str(college.id)}, headers=headers2)
+    await client.post(
+        "/api/v1/verification/college-id",
+        files={"file": ("id2.jpg", create_dummy_id_card(student_name="Second User"), "image/jpeg")},
+        headers=headers2,
+    )
+
+    # User 2 attempts to use User 1's face
+    with patch("app.services.verification_service.face_service.process_face_image", return_value=mock_res_a):
+        resp_dup = await client.post(
+            "/api/v1/verification/face",
+            files={"file": ("face_dup.jpg", create_dummy_id_card(), "image/jpeg")},
+            headers=headers2,
+        )
+        assert resp_dup.status_code == 409
+        assert "already registered" in resp_dup.json()["detail"].lower()
