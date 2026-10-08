@@ -19,37 +19,46 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "departments",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),
-        sa.Column("college_id", UUID(as_uuid=True), sa.ForeignKey("colleges.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("name", sa.String(255), nullable=False),
-        sa.Column("code", sa.String(50), nullable=False),
-        sa.Column("hod_name", sa.String(255), nullable=True),
-        sa.Column("hod_email", sa.String(320), nullable=True),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.UniqueConstraint("college_id", "code", name="uq_department_college_code"),
-    )
-    op.create_index("ix_departments_college_id", "departments", ["college_id"])
-    op.create_index("ix_departments_is_active", "departments", ["is_active"])
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
 
-    op.add_column("users", sa.Column("college_id", UUID(as_uuid=True), nullable=True))
-    op.add_column("users", sa.Column("department_id", UUID(as_uuid=True), nullable=True))
-    op.create_foreign_key("fk_users_college_id", "users", "colleges", ["college_id"], ["id"], ondelete="SET NULL")
-    op.create_foreign_key("fk_users_department_id", "users", "departments", ["department_id"], ["id"], ondelete="SET NULL")
-    op.create_index("ix_users_college_id", "users", ["college_id"])
-    op.create_index("ix_users_department_id", "users", ["department_id"])
+    if not insp.has_table("departments"):
+        op.create_table(
+            "departments",
+            sa.Column("id", UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),
+            sa.Column("college_id", UUID(as_uuid=True), sa.ForeignKey("colleges.id", ondelete="CASCADE"), nullable=False),
+            sa.Column("name", sa.String(255), nullable=False),
+            sa.Column("code", sa.String(50), nullable=False),
+            sa.Column("hod_name", sa.String(255), nullable=True),
+            sa.Column("hod_email", sa.String(320), nullable=True),
+            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+            sa.UniqueConstraint("college_id", "code", name="uq_department_college_code"),
+        )
+        op.create_index("ix_departments_college_id", "departments", ["college_id"])
+        op.create_index("ix_departments_is_active", "departments", ["is_active"])
 
-    op.create_table(
-        "system_configs",
-        sa.Column("key", sa.String(100), primary_key=True),
-        sa.Column("value", sa.JSON(), nullable=False),
-        sa.Column("description", sa.String(255), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-    )
+    user_columns = [c["name"] for c in insp.get_columns("users")]
+    if "college_id" not in user_columns:
+        op.add_column("users", sa.Column("college_id", UUID(as_uuid=True), nullable=True))
+        op.create_foreign_key("fk_users_college_id", "users", "colleges", ["college_id"], ["id"], ondelete="SET NULL")
+        op.create_index("ix_users_college_id", "users", ["college_id"])
+
+    if "department_id" not in user_columns:
+        op.add_column("users", sa.Column("department_id", UUID(as_uuid=True), nullable=True))
+        op.create_foreign_key("fk_users_department_id", "users", "departments", ["department_id"], ["id"], ondelete="SET NULL")
+        op.create_index("ix_users_department_id", "users", ["department_id"])
+
+    if not insp.has_table("system_configs"):
+        op.create_table(
+            "system_configs",
+            sa.Column("key", sa.String(100), primary_key=True),
+            sa.Column("value", sa.JSON(), nullable=False),
+            sa.Column("description", sa.String(255), nullable=True),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        )
 
 
 def downgrade() -> None:

@@ -20,7 +20,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Add last_login column to users table
-    op.add_column('users', sa.Column('last_login', sa.DateTime(timezone=True), nullable=True))
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    user_columns = [c["name"] for c in insp.get_columns("users")]
+    if "last_login" not in user_columns:
+        op.add_column('users', sa.Column('last_login', sa.DateTime(timezone=True), nullable=True))
 
 
 def downgrade() -> None:

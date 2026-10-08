@@ -17,11 +17,15 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "users",
-        sa.Column("permissions", sa.JSON(), nullable=False, server_default="[]"),
-    )
-    op.alter_column("users", "permissions", server_default=None)
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    user_columns = [c["name"] for c in insp.get_columns("users")]
+    if "permissions" not in user_columns:
+        op.add_column(
+            "users",
+            sa.Column("permissions", sa.JSON(), nullable=False, server_default="[]"),
+        )
+        op.alter_column("users", "permissions", server_default=None)
 
 
 def downgrade() -> None:
