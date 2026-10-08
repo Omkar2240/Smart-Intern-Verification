@@ -8,10 +8,17 @@
     "scheme": "mobileapp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "TrackIntern needs your location to verify attendance at your registered workplace office."
+      }
     },
     "android": {
       "package": "com.trackintern.app",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -26,6 +33,12 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "TrackIntern needs your location to verify attendance at your registered workplace office."
+        }
+      ],
       [
         "expo-splash-screen",
         {

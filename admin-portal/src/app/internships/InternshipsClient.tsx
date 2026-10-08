@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Briefcase, Search, Building2, MapPin, Calendar, ChevronRight, X, Loader2, CheckCircle2, XCircle,
+  Briefcase, Search, Building2, MapPin, Calendar, ChevronRight, X, Loader2, CheckCircle2, XCircle, ExternalLink,
 } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
@@ -172,7 +172,7 @@ export function InternshipsClient({ initialData, colleges }: Props) {
               <table className="w-full text-xs">
                 <thead className="bg-slate-50/80 border-b border-slate-200">
                   <tr>
-                    {["Student", "Company / Role", "Type", "Duration", "Stage", "Status", "Action"].map((col) => (
+                    {["Student", "Company / Role", "Mode & Workplace Location", "Duration", "Stage", "Status", "Action"].map((col) => (
                       <th key={col} className="py-3 px-4 text-left font-mono text-[10px] text-slate-500 uppercase tracking-wider font-bold whitespace-nowrap">{col}</th>
                     ))}
                   </tr>
@@ -201,10 +201,35 @@ export function InternshipsClient({ initialData, colleges }: Props) {
                             </div>
                           </div>
                         </td>
-                        <td className="py-3.5 px-4">
-                          <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 capitalize">
-                            {item.internship_type}
-                          </span>
+                        <td className="py-3.5 px-4 max-w-[200px]">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 capitalize">
+                                {item.internship_type}
+                              </span>
+                              {item.workplace_lat != null && item.workplace_lng != null && (
+                                <a
+                                  href={`https://www.openstreetmap.org/?mlat=${item.workplace_lat}&mlon=${item.workplace_lng}#map=16/${item.workplace_lat}/${item.workplace_lng}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded transition-colors"
+                                  title="View on OpenStreetMap"
+                                >
+                                  <ExternalLink className="w-2.5 h-2.5" /> Map
+                                </a>
+                              )}
+                            </div>
+                            {item.location ? (
+                              <p className="text-[10px] text-slate-600 truncate" title={item.location}>
+                                {item.location}
+                              </p>
+                            ) : item.internship_type === "remote" ? (
+                              <p className="text-[10px] text-emerald-600 font-medium">100% Remote</p>
+                            ) : (
+                              <p className="text-[10px] text-slate-400">—</p>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-1 text-[10px] text-slate-500 font-mono">
@@ -284,6 +309,49 @@ export function InternshipsClient({ initialData, colleges }: Props) {
                     <p className="text-[11px] text-slate-900 font-medium">{value}</p>
                   </div>
                 ))}
+
+                {/* Workplace Geofence Verification Card */}
+                {detailItem.workplace_lat != null && detailItem.workplace_lng != null && (
+                  <div className="p-3 bg-emerald-50/80 border border-emerald-200 rounded-xl space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[10px] font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-emerald-600" /> Workplace Geofence
+                      </span>
+                      <a
+                        href={`https://www.openstreetmap.org/?mlat=${detailItem.workplace_lat}&mlon=${detailItem.workplace_lng}#map=16/${detailItem.workplace_lat}/${detailItem.workplace_lng}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-sky-700 hover:text-sky-800 bg-white px-2 py-1 rounded-lg border border-sky-200 shadow-xs transition-colors"
+                      >
+                        <ExternalLink className="w-3 h-3 text-sky-600" /> Open on Map
+                      </a>
+                    </div>
+                    <p className="font-mono text-[10px] text-emerald-950">
+                      Latitude: {detailItem.workplace_lat.toFixed(5)} • Longitude: {detailItem.workplace_lng.toFixed(5)}
+                    </p>
+                    <p className="text-[10px] text-emerald-700 leading-tight">
+                      300-meter radius boundary verified for student biometric attendance.
+                    </p>
+                  </div>
+                )}
+
+                {/* Offer Letter Proof Document Link */}
+                {detailItem.offer_letter_url && (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+                    <div>
+                      <p className="font-mono text-[10px] font-bold text-slate-700 uppercase tracking-wider">Offer Letter Proof</p>
+                      <p className="text-[10px] text-slate-500">Student uploaded proof</p>
+                    </div>
+                    <a
+                      href={detailItem.offer_letter_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-sky-700 hover:text-sky-800 bg-white px-2 py-1 rounded-lg border border-sky-200 shadow-xs transition-colors"
+                    >
+                      <ExternalLink className="w-3 h-3 text-sky-600" /> View Document
+                    </a>
+                  </div>
+                )}
 
                 {/* Status update */}
                 <div className="pt-4 border-t border-slate-200">

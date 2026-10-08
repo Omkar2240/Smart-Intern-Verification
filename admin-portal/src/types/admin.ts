@@ -104,6 +104,8 @@ export interface InternshipItem {
   end_date?: string | null;
   stipend?: string | null;
   offer_letter_url?: string | null;
+  workplace_lat?: number | null;
+  workplace_lng?: number | null;
   verification_stage: InternshipStage;
   status: "pending" | "verified" | "rejected" | string;
   rejection_reason?: string | null;
@@ -288,11 +290,16 @@ export interface AttendanceRecord {
   student_name: string;
   department_id?: string | null;
   department_name?: string | null;
+  company_name?: string | null;
   date: string;
   check_in?: string | null;
   check_out?: string | null;
   status: "present" | "absent" | "late" | string;
   attendance_rate?: number | null;
+  work_mode?: "offline" | "online" | string | null;
+  location_verified?: boolean | null;
+  check_in_lat?: number | null;
+  check_in_lng?: number | null;
 }
 
 export interface AttendanceListResponse {

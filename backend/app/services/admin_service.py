@@ -517,6 +517,8 @@ class AdminService:
                     department=r.department,
                     internship_type=r.internship_type,
                     location=r.location,
+                    workplace_lat=r.workplace_lat,
+                    workplace_lng=r.workplace_lng,
                     supervisor_name=r.supervisor_name,
                     supervisor_email=r.supervisor_email,
                     supervisor_phone=r.supervisor_phone,

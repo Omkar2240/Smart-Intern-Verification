@@ -157,6 +157,8 @@ export interface Internship {
   shift_end_time?: string | null;
   actual_hours_per_day?: number | null;
   hybrid_schedule?: string | null;
+  workplace_lat?: number | null;
+  workplace_lng?: number | null;
   verification_stage: 'submitted' | 'tp_review' | 'mentor_review' | 'verified' | 'rejected';
   status: 'pending' | 'verified' | 'rejected';
   rejection_reason?: string | null;
@@ -182,6 +184,8 @@ export interface InternshipCreatePayload {
   shift_end_time?: string;
   actual_hours_per_day?: number;
   hybrid_schedule?: string;
+  workplace_lat?: number | null;
+  workplace_lng?: number | null;
 }
 
 export interface AttendanceCheckInPayload {

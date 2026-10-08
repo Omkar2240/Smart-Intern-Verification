@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { Clock, Search, Users, TrendingUp, TrendingDown, Activity, Zap, CheckCircle, AlertTriangle, X } from "lucide-react";
+import { Clock, Search, Users, TrendingUp, TrendingDown, Activity, Zap, CheckCircle, AlertTriangle, X, MapPin, ExternalLink, Globe } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { StatCard } from "@/components/StatCard";
@@ -182,16 +182,16 @@ export function AttendanceClient({ initialData, initialAnalytics }: Props) {
               <table className="w-full text-xs">
                 <thead className="bg-slate-50/80 border-b border-slate-200">
                   <tr>
-                    {["Student", "Department", "Date", "Check In", "Check Out", "Status", "Rate", "Action"].map((col) => (
+                    {["Student", "Department", "Work Mode", "Check-In Location & Map", "Date", "Check In", "Check Out", "Status", "Rate", "Action"].map((col) => (
                       <th key={col} className="py-3 px-4 text-left font-mono text-[10px] text-slate-500 uppercase tracking-wider font-bold whitespace-nowrap">{col}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {loading ? (
-                    <tr><td colSpan={7}><TableSkeleton rows={8} cols={7} /></td></tr>
+                    <tr><td colSpan={10}><TableSkeleton rows={8} cols={10} /></td></tr>
                   ) : items.length === 0 ? (
-                    <tr><td colSpan={7}><EmptyState icon={Clock} title="No attendance records" description="No records found for the selected period." /></td></tr>
+                    <tr><td colSpan={10}><EmptyState icon={Clock} title="No attendance records" description="No records found for the selected period." /></td></tr>
                   ) : (
                     items.map((record, idx) => (
                       <motion.tr key={record.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: idx * 0.02 }}
@@ -199,8 +199,59 @@ export function AttendanceClient({ initialData, initialAnalytics }: Props) {
                       >
                         <td className="py-3.5 px-4">
                           <p className="font-semibold text-slate-900">{record.student_name}</p>
+                          {record.company_name && (
+                            <p className="text-[10px] text-slate-500 truncate max-w-[140px]">
+                              {record.company_name}
+                            </p>
+                          )}
                         </td>
                         <td className="py-3.5 px-4 text-[11px] text-slate-600">{record.department_name ?? "—"}</td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          {record.work_mode === "online" ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                              <Globe className="w-2.5 h-2.5" /> Remote
+                            </span>
+                          ) : record.work_mode === "offline" ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              <MapPin className="w-2.5 h-2.5" /> On-Site
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          {record.check_in_lat != null && record.check_in_lng != null ? (
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {record.location_verified ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                    <CheckCircle className="w-2.5 h-2.5 text-emerald-600" /> Verified Geofence
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                    <AlertTriangle className="w-2.5 h-2.5 text-amber-600" /> Logged
+                                  </span>
+                                )}
+                                <a
+                                  href={`https://www.openstreetmap.org/?mlat=${record.check_in_lat}&mlon=${record.check_in_lng}#map=16/${record.check_in_lat}/${record.check_in_lng}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded transition-colors"
+                                  title="View on Map"
+                                >
+                                  <ExternalLink className="w-2.5 h-2.5" /> Map
+                                </a>
+                              </div>
+                              <p className="font-mono text-[9px] text-slate-500">
+                                {record.check_in_lat.toFixed(4)}, {record.check_in_lng.toFixed(4)}
+                              </p>
+                            </div>
+                          ) : record.work_mode === "online" ? (
+                            <span className="text-[10px] text-slate-400 italic">Remote (Digital Proof)</span>
+                          ) : (
+                            <span className="text-slate-400 font-mono text-[10px]">—</span>
+                          )}
+                        </td>
                         <td className="py-3.5 px-4 font-mono text-[10px] text-slate-600">{record.date}</td>
                         <td className="py-3.5 px-4 font-mono text-[10px] text-slate-600">{record.check_in ?? "—"}</td>
                         <td className="py-3.5 px-4 font-mono text-[10px] text-slate-600">{record.check_out ?? "—"}</td>

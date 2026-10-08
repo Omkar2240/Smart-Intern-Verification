@@ -22,6 +22,7 @@ import {
   FontAwesome5,
 } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 
 import { api, Internship, InternshipCreatePayload } from '@/services/api';
 import { useAuth } from '@/context/auth-context';
@@ -102,6 +103,9 @@ export default function InternshipManagementScreen() {
   const [department, setDepartment] = useState('');
   const [internshipType, setInternshipType] = useState<'on_site' | 'remote' | 'hybrid'>('on_site');
   const [location, setLocation] = useState('');
+  const [workplaceLat, setWorkplaceLat] = useState<number | null>(null);
+  const [workplaceLng, setWorkplaceLng] = useState<number | null>(null);
+  const [locatingCurrent, setLocatingCurrent] = useState(false);
   const [hybridSchedule, setHybridSchedule] = useState<WeeklySchedule>(DEFAULT_HYBRID_SCHEDULE);
   const [supervisorName, setSupervisorName] = useState('');
   const [supervisorEmail, setSupervisorEmail] = useState('');
@@ -116,6 +120,53 @@ export default function InternshipManagementScreen() {
   const [proofFileName, setProofFileName] = useState<string | null>(null);
   const [uploadingProof, setUploadingProof] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const handleUseCurrentGpsLocation = async () => {
+    try {
+      setLocatingCurrent(true);
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Location Permission Required',
+          'Please allow location access to auto-detect your office workplace location.'
+        );
+        return;
+      }
+
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      const lat = loc.coords.latitude;
+      const lng = loc.coords.longitude;
+      setWorkplaceLat(lat);
+      setWorkplaceLng(lng);
+
+      // Reverse geocode via OpenStreetMap Nominatim
+      try {
+        const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`;
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'SmartInternVerification/1.0' },
+        });
+        const data = await res.json();
+        if (data && (data.display_name || data.name)) {
+          setLocation(data.display_name || data.name);
+        } else {
+          setLocation(`Office Location (${lat.toFixed(5)}, ${lng.toFixed(5)})`);
+        }
+      } catch {
+        setLocation(`Office Location (${lat.toFixed(5)}, ${lng.toFixed(5)})`);
+      }
+
+      Alert.alert(
+        'Location Detected',
+        `Current office location captured:\nLat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}\n\nThis will be used for attendance geofencing.`
+      );
+    } catch (err: any) {
+      Alert.alert('GPS Error', err.message || 'Could not retrieve current location.');
+    } finally {
+      setLocatingCurrent(false);
+    }
+  };
 
   // Simulator Modal State
   const [showSimModal, setShowSimModal] = useState(false);
@@ -156,6 +207,8 @@ export default function InternshipManagementScreen() {
     setDepartment('');
     setInternshipType('on_site');
     setLocation('');
+    setWorkplaceLat(null);
+    setWorkplaceLng(null);
     setHybridSchedule(DEFAULT_HYBRID_SCHEDULE);
     setSupervisorName('');
     setSupervisorEmail('');
@@ -189,6 +242,8 @@ export default function InternshipManagementScreen() {
     setDepartment(item.department || '');
     setInternshipType(item.internship_type || 'on_site');
     setLocation(item.location || '');
+    setWorkplaceLat(item.workplace_lat ?? null);
+    setWorkplaceLng(item.workplace_lng ?? null);
     if (item.hybrid_schedule) {
       try {
         setHybridSchedule(JSON.parse(item.hybrid_schedule));
@@ -335,6 +390,8 @@ export default function InternshipManagementScreen() {
       department: department.trim() || undefined,
       internship_type: internshipType,
       location: internshipType === 'remote' ? undefined : (location.trim() || undefined),
+      workplace_lat: internshipType === 'remote' ? null : workplaceLat,
+      workplace_lng: internshipType === 'remote' ? null : workplaceLng,
       supervisor_name: supervisorName.trim() || undefined,
       supervisor_email: supervisorEmail.trim() || undefined,
       supervisor_phone: supervisorPhone.trim() || undefined,
@@ -772,6 +829,15 @@ export default function InternshipManagementScreen() {
                     </Text>
                   </View>
 
+                  {item.workplace_lat != null && item.workplace_lng != null && (
+                    <View style={styles.detailRow}>
+                      <Ionicons name="navigate-circle-outline" size={16} color="#059669" />
+                      <Text style={[styles.detailText, { color: '#059669', fontWeight: '500' }]}>
+                        GPS: {item.workplace_lat.toFixed(5)}, {item.workplace_lng.toFixed(5)} (300m perimeter)
+                      </Text>
+                    </View>
+                  )}
+
                   {item.offer_letter_url && (
                     <View style={styles.detailRow}>
                       <Ionicons name="document-attach-outline" size={16} color="#059669" />
@@ -1062,23 +1128,49 @@ export default function InternshipManagementScreen() {
                     Used for GPS geofencing & biometric face check-in on office days.
                   </Text>
 
-                  {/* Prominent Map Picker Action Button */}
-                  <TouchableOpacity
-                    style={styles.openMapBtn}
-                    onPress={() => setShowLocationPicker(true)}
-                    activeOpacity={0.85}
-                  >
-                    <View style={styles.openMapIconBox}>
-                      <Ionicons name="map" size={18} color="#D97706" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.openMapBtnTitle}>Pick Location from Map</Text>
-                      <Text style={styles.openMapBtnSub}>
-                        Country ➔ State ➔ City ➔ Exact Landmark (Free OpenStreetMap API)
-                      </Text>
-                    </View>
-                    <Feather name="chevron-right" size={18} color="#D97706" />
-                  </TouchableOpacity>
+                  {/* Location Action Buttons: Current GPS & Map Picker */}
+                  <View style={{ gap: 8, marginBottom: 12 }}>
+                    <TouchableOpacity
+                      style={[styles.openMapBtn, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}
+                      onPress={handleUseCurrentGpsLocation}
+                      disabled={locatingCurrent}
+                      activeOpacity={0.85}
+                    >
+                      <View style={[styles.openMapIconBox, { backgroundColor: '#10B981' }]}>
+                        {locatingCurrent ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <MaterialCommunityIcons name="crosshairs-gps" size={18} color="#FFFFFF" />
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.openMapBtnTitle, { color: '#065F46' }]}>
+                          {locatingCurrent ? 'Detecting Device GPS...' : 'Use Current Device Location (GPS)'}
+                        </Text>
+                        <Text style={styles.openMapBtnSub}>
+                          Auto-captures exact office latitude & longitude for geofence verification
+                        </Text>
+                      </View>
+                      <Feather name="chevron-right" size={18} color="#059669" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.openMapBtn}
+                      onPress={() => setShowLocationPicker(true)}
+                      activeOpacity={0.85}
+                    >
+                      <View style={styles.openMapIconBox}>
+                        <Ionicons name="map" size={18} color="#D97706" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.openMapBtnTitle}>Pick Location from Map</Text>
+                        <Text style={styles.openMapBtnSub}>
+                          Country ➔ State ➔ City ➔ Exact Landmark (OpenStreetMap API)
+                        </Text>
+                      </View>
+                      <Feather name="chevron-right" size={18} color="#D97706" />
+                    </TouchableOpacity>
+                  </View>
 
                   {/* Selected Location Card or Input */}
                   {location ? (
@@ -1093,6 +1185,14 @@ export default function InternshipManagementScreen() {
                         </TouchableOpacity>
                       </View>
                       <Text style={styles.selectedAddressContent}>{location}</Text>
+                      {workplaceLat && workplaceLng && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, marginBottom: 8 }}>
+                          <Ionicons name="compass-outline" size={14} color="#059669" />
+                          <Text style={{ fontSize: 12, color: '#059669', fontWeight: '600' }}>
+                            Geofence Coords: {workplaceLat.toFixed(5)}, {workplaceLng.toFixed(5)} (300m perimeter)
+                          </Text>
+                        </View>
+                      )}
                       <TextInput
                         style={styles.subBuildingInput}
                         placeholder="Optional: Add Floor, Wing, or Desk (e.g. 4th Floor, Tower B)"
@@ -1316,6 +1416,8 @@ export default function InternshipManagementScreen() {
         initialLocation={location}
         onSelectLocation={(selected: SelectedLocationResult) => {
           setLocation(selected.fullAddress);
+          setWorkplaceLat(selected.lat);
+          setWorkplaceLng(selected.lng);
         }}
       />
     </SafeAreaView>

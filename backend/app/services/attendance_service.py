@@ -71,6 +71,20 @@ def validate_shift_time(internship: Internship, current_dt: datetime) -> tuple[b
         return True, f"Shift validation bypassed: {e}"
 
 
+def calculate_haversine_distance_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate Great Circle distance between two GPS coordinates in meters."""
+    import math
+    R = 6371000.0  # Earth radius in meters
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+
+    a = math.sin(delta_phi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2.0) ** 2
+    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+    return R * c
+
+
 async def verify_student_face(
     db: AsyncSession,
     *,
@@ -178,8 +192,29 @@ async def check_in_student(
 
     if mode == "offline":
         # Location geofence check
-        if request.latitude is not None and request.longitude is not None:
-            # Tolerant 500m geofence radius (or verified default if no coords stored in mock)
+        if request.latitude is None or request.longitude is None:
+            raise HTTPException(
+                status_code=400,
+                detail="GPS location coordinates are required for on-site check-in. Please allow location access on your device.",
+            )
+
+        if internship.workplace_lat is not None and internship.workplace_lng is not None:
+            dist_meters = calculate_haversine_distance_meters(
+                request.latitude, request.longitude,
+                internship.workplace_lat, internship.workplace_lng
+            )
+            # 300m geofence perimeter around office
+            if dist_meters <= 300:
+                location_verified = True
+            else:
+                location_verified = False
+                dist_str = f"{int(dist_meters)}m" if dist_meters < 1000 else f"{dist_meters/1000:.1f}km"
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Location verification failed: You are {dist_str} away from your registered workplace ({internship.company_name}). On-site check-in requires being within 300m of the office location.",
+                )
+        else:
+            # Legacy fallback if no workplace coordinates were recorded
             location_verified = True
 
         # Biometric ArcFace check - strictly mandatory for offline check-in
@@ -578,6 +613,11 @@ async def list_attendance(
                 check_out=record.check_out.isoformat() if record.check_out else None,
                 status=record.status,
                 attendance_rate=round(rate, 2),
+                work_mode=record.work_mode,
+                location_verified=record.location_verified,
+                check_in_lat=record.check_in_lat,
+                check_in_lng=record.check_in_lng,
+                company_name=record.company_id,
             )
         )
     return AdminAttendanceListResponse(

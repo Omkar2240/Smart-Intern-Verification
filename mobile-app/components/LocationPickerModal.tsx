@@ -13,6 +13,7 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons, Feather, MaterialIcons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 
 export interface SelectedLocationResult {
   fullAddress: string;
@@ -203,31 +204,33 @@ export default function LocationPickerModal({
     }
   };
 
-  // Reverse geocode via GPS
+  // Reverse geocode via native device GPS
   const handleAutoDetectGps = async () => {
     setDetectingGps(true);
     try {
-      if (typeof navigator !== 'undefined' && navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => {
-            const lat = pos.coords.latitude;
-            const lng = pos.coords.longitude;
-            await reverseGeocodeAndSelect(lat, lng);
-            setDetectingGps(false);
-          },
-          (err) => {
-            setDetectingGps(false);
-            Alert.alert('GPS Notice', 'Could not access GPS location. Please choose Country, State, and City manually.');
-          },
-          { enableHighAccuracy: true, timeout: 8000 }
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Location Permission Required',
+          'Please allow location access to auto-detect your office workplace location. You can also pick your country, state, and city manually.'
         );
-      } else {
         setDetectingGps(false);
-        Alert.alert('GPS Unavailable', 'GPS location is not supported on this platform. Please select manually.');
+        return;
       }
+
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      const lat = loc.coords.latitude;
+      const lng = loc.coords.longitude;
+      await reverseGeocodeAndSelect(lat, lng);
     } catch (e: any) {
+      Alert.alert(
+        'GPS Detection Failed',
+        'Could not obtain current GPS position. Please ensure location services are enabled on your device.'
+      );
+    } finally {
       setDetectingGps(false);
-      Alert.alert('GPS Notice', 'Location detection could not be completed.');
     }
   };
 
@@ -254,9 +257,25 @@ export default function LocationPickerModal({
         setExactQuery(addr.road || addr.suburb || data.name || '');
         setSelectedResult(data);
         setCurrentStep(4);
+      } else {
+        setSelectedResult({
+          lat: lat.toString(),
+          lon: lng.toString(),
+          name: 'Current Office Location',
+          display_name: `Workplace at ${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+          address: {},
+        });
+        setCurrentStep(4);
       }
     } catch (e) {
-      // fallback
+      setSelectedResult({
+        lat: lat.toString(),
+        lon: lng.toString(),
+        name: 'Current Office Location',
+        display_name: `Workplace at ${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+        address: {},
+      });
+      setCurrentStep(4);
     }
   };
 

@@ -25,6 +25,8 @@ class Internship(Base, UUIDMixin, TimestampMixin):
     department: Mapped[str | None] = mapped_column(String(255), nullable=True)
     internship_type: Mapped[str] = mapped_column(String(50), default=INTERNSHIP_TYPE_DEFAULT, nullable=False)
     location: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    workplace_lat: Mapped[float | None] = mapped_column(nullable=True)
+    workplace_lng: Mapped[float | None] = mapped_column(nullable=True)
 
     supervisor_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     supervisor_email: Mapped[str | None] = mapped_column(String(320), nullable=True)

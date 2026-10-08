@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { useAuth } from '@/context/auth-context';
 import {
   api,
@@ -95,6 +96,75 @@ export default function HomeScreen() {
     message: string;
     student_name?: string;
   } | null>(null);
+
+  // Real-time GPS Location & Geofencing State
+  const [deviceLocation, setDeviceLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locatingDevice, setLocatingDevice] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [geofenceDistanceMeters, setGeofenceDistanceMeters] = useState<number | null>(null);
+  const [isInsideGeofence, setIsInsideGeofence] = useState<boolean | null>(null);
+
+  function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371e3; // Earth radius in meters
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const phi1 = toRad(lat1);
+    const phi2 = toRad(lat2);
+    const deltaPhi = toRad(lat2 - lat1);
+    const deltaLambda = toRad(lon2 - lon1);
+
+    const a =
+      Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+      Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+  }
+
+  const verifyCurrentDeviceLocation = async (targetInternship?: Internship | null) => {
+    const activeInt = targetInternship !== undefined ? targetInternship : internship;
+    setLocatingDevice(true);
+    setLocationError(null);
+    setGeofenceDistanceMeters(null);
+    setIsInsideGeofence(null);
+
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setLocationError('Location permission denied. Please allow location access in settings to verify workplace attendance.');
+        setIsInsideGeofence(false);
+        return;
+      }
+
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      const curLat = loc.coords.latitude;
+      const curLng = loc.coords.longitude;
+      setDeviceLocation({ lat: curLat, lng: curLng });
+
+      if (activeInt?.workplace_lat != null && activeInt?.workplace_lng != null) {
+        const dist = calculateDistanceMeters(
+          curLat,
+          curLng,
+          activeInt.workplace_lat,
+          activeInt.workplace_lng
+        );
+        setGeofenceDistanceMeters(dist);
+        // Geofence perimeter is 300 meters
+        const inside = dist <= 300;
+        setIsInsideGeofence(inside);
+      } else {
+        // Fallback for older records without coordinates configured
+        setGeofenceDistanceMeters(0);
+        setIsInsideGeofence(true);
+      }
+    } catch (err: any) {
+      setLocationError(err.message || 'Could not retrieve GPS position. Please ensure device location is enabled.');
+      setIsInsideGeofence(false);
+    } finally {
+      setLocatingDevice(false);
+    }
+  };
 
   // Real-time clock updater
   useEffect(() => {
@@ -486,6 +556,7 @@ export default function HomeScreen() {
         setOfflineSelfieBase64(null);
         setFaceVerifyResult(null);
         setFaceVerifying(false);
+        verifyCurrentDeviceLocation(internship);
         setShowOfflineModal(true);
       }
     } else {
@@ -494,6 +565,7 @@ export default function HomeScreen() {
       setOfflineSelfieBase64(null);
       setFaceVerifyResult(null);
       setFaceVerifying(false);
+      verifyCurrentDeviceLocation(internship);
       setShowOfflineModal(true);
     }
   };
@@ -610,6 +682,20 @@ export default function HomeScreen() {
 
   // Submit Offline Check-In (Location + Selfie)
   const handleOfflineCheckInSubmit = async () => {
+    if (!deviceLocation || isInsideGeofence !== true) {
+      const distStr =
+        geofenceDistanceMeters != null
+          ? geofenceDistanceMeters >= 1000
+            ? `${(geofenceDistanceMeters / 1000).toFixed(1)} km`
+            : `${Math.round(geofenceDistanceMeters)} meters`
+          : 'unknown distance';
+      Alert.alert(
+        'Geofence Perimeter Mismatch ❌',
+        `You are not currently at the registered office workplace (detected ${distStr} away).\n\nYou must be within 300m of your office to verify attendance.`
+      );
+      return;
+    }
+
     if (!offlineSelfieBase64) {
       Alert.alert('Selfie Required', 'Please capture a clear selfie to verify your workplace identity.');
       return;
@@ -627,11 +713,10 @@ export default function HomeScreen() {
 
     try {
       setCheckInSubmitting(true);
-      // Coordinates default to Bangalore office / campus geofence
       const res = await api.checkIn({
         work_mode: 'offline',
-        latitude: 12.9716,
-        longitude: 77.5946,
+        latitude: deviceLocation.lat,
+        longitude: deviceLocation.lng,
         face_image_base64: offlineSelfieBase64,
       });
 
@@ -641,7 +726,7 @@ export default function HomeScreen() {
       setShowOfflineModal(false);
       Alert.alert(
         'Check-In Successful! 📍',
-        `Biometric identity verified (${faceVerifyResult.student_name || user?.name || 'Student'}).\nChecked in at ${timeStamp}.\n2 random 10-minute compliance verification tasks scheduled during your shift.`
+        `Biometric identity verified (${faceVerifyResult.student_name || user?.name || 'Student'}).\nWorkplace location verified.\nChecked in at ${timeStamp}.\n2 random 10-minute compliance verification tasks scheduled during your shift.`
       );
       checkActiveTask();
       loadAttendanceData();
@@ -1389,19 +1474,88 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Location Geofence Pill */}
-            <View style={styles.geofenceCard}>
-              <Ionicons name="location" size={18} color="#059669" />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.geofenceTitle}>
-                  {internship?.company_name || 'Assigned Workplace'}
-                </Text>
-                <Text style={styles.geofenceSubtitle}>
-                  GPS Coordinates Verified (12.9716, 77.5946) • Within 200m perimeter
-                </Text>
+            {/* Live Location Geofence Status Card */}
+            {locatingDevice ? (
+              <View style={[styles.geofenceCard, { backgroundColor: '#F0F9FF', borderColor: '#BAE6FD' }]}>
+                <ActivityIndicator size="small" color="#0284C7" />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.geofenceTitle, { color: '#0369A1' }]}>
+                    Detecting Device GPS Location...
+                  </Text>
+                  <Text style={styles.geofenceSubtitle}>
+                    Requesting high-accuracy device coordinates to verify office perimeter.
+                  </Text>
+                </View>
               </View>
-              <Ionicons name="checkmark-circle" size={20} color="#059669" />
-            </View>
+            ) : locationError ? (
+              <View style={[styles.geofenceCard, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+                <Ionicons name="alert-circle" size={22} color="#DC2626" />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.geofenceTitle, { color: '#991B1B' }]}>
+                    Location Access Required
+                  </Text>
+                  <Text style={[styles.geofenceSubtitle, { color: '#B91C1C' }]}>
+                    {locationError}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => verifyCurrentDeviceLocation()}
+                  style={styles.recheckLocationBtn}
+                >
+                  <Text style={styles.recheckLocationBtnText}>Allow / Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : isInsideGeofence === false ? (
+              <View style={[styles.geofenceCard, { backgroundColor: '#FEF2F2', borderColor: '#F87171' }]}>
+                <Ionicons name="close-circle" size={24} color="#DC2626" />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.geofenceTitle, { color: '#991B1B' }]}>
+                    ❌ Outside Office Geofence
+                  </Text>
+                  <Text style={[styles.geofenceSubtitle, { color: '#B91C1C' }]}>
+                    Detected {geofenceDistanceMeters && geofenceDistanceMeters >= 1000
+                      ? `${(geofenceDistanceMeters / 1000).toFixed(1)} km`
+                      : `${Math.round(geofenceDistanceMeters || 0)} meters`} away from {internship?.company_name || 'office'}.
+                    {'\n'}You must be within 300m perimeter to check in.
+                  </Text>
+                  {deviceLocation && internship?.workplace_lat != null && (
+                    <Text style={{ fontSize: 11, color: '#7F1D1D', marginTop: 4 }}>
+                      Current: {deviceLocation.lat.toFixed(4)}, {deviceLocation.lng.toFixed(4)} ➔ Office: {internship.workplace_lat.toFixed(4)}, {internship.workplace_lng?.toFixed(4)}
+                    </Text>
+                  )}
+                </View>
+                <TouchableOpacity
+                  onPress={() => verifyCurrentDeviceLocation()}
+                  style={styles.recheckLocationBtn}
+                >
+                  <Feather name="refresh-cw" size={14} color="#DC2626" />
+                  <Text style={styles.recheckLocationBtnText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.geofenceCard}>
+                <Ionicons name="checkmark-circle" size={22} color="#059669" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.geofenceTitle}>
+                    📍 Inside Office Geofence • Verified
+                  </Text>
+                  <Text style={styles.geofenceSubtitle}>
+                    {internship?.company_name || 'Assigned Workplace'}
+                    {geofenceDistanceMeters != null && geofenceDistanceMeters > 0
+                      ? ` (${Math.round(geofenceDistanceMeters)}m from office • within 300m)`
+                      : deviceLocation
+                      ? ` (${deviceLocation.lat.toFixed(4)}, ${deviceLocation.lng.toFixed(4)})`
+                      : ''}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => verifyCurrentDeviceLocation()}
+                  style={{ padding: 4 }}
+                >
+                  <Feather name="refresh-cw" size={14} color="#059669" />
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Selfie Preview or Camera Button */}
             <View style={{ alignItems: 'center', marginVertical: 14 }}>
@@ -1464,13 +1618,32 @@ export default function HomeScreen() {
             <TouchableOpacity
               style={[
                 styles.submitCheckInBtn,
-                (checkInSubmitting || faceVerifying || !faceVerifyResult?.verified) && styles.btnDisabled,
+                (checkInSubmitting ||
+                  faceVerifying ||
+                  !faceVerifyResult?.verified ||
+                  locatingDevice ||
+                  isInsideGeofence !== true) &&
+                  styles.btnDisabled,
               ]}
               onPress={handleOfflineCheckInSubmit}
-              disabled={checkInSubmitting || faceVerifying || !faceVerifyResult?.verified}
+              disabled={
+                checkInSubmitting ||
+                faceVerifying ||
+                !faceVerifyResult?.verified ||
+                locatingDevice ||
+                isInsideGeofence !== true
+              }
             >
               {checkInSubmitting ? (
                 <ActivityIndicator color="#111827" />
+              ) : locatingDevice ? (
+                <Text style={styles.submitCheckInBtnText}>Acquiring GPS Location...</Text>
+              ) : locationError ? (
+                <Text style={styles.submitCheckInBtnText}>Enable Location to Check-In</Text>
+              ) : isInsideGeofence === false ? (
+                <Text style={styles.submitCheckInBtnText}>
+                  Check-In Blocked (Outside Office Geofence)
+                </Text>
               ) : faceVerifying ? (
                 <Text style={styles.submitCheckInBtnText}>Verifying Face Biometrics...</Text>
               ) : !offlineSelfieUri ? (
@@ -2372,6 +2545,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#047857',
     marginTop: 2,
+    lineHeight: 15,
+  },
+  recheckLocationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  recheckLocationBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#DC2626',
   },
   selfiePromptBox: {
     width: '100%',

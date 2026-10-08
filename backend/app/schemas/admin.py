@@ -57,6 +57,8 @@ class AdminInternshipItem(BaseModel):
     department: str | None = None
     internship_type: str
     location: str | None = None
+    workplace_lat: float | None = None
+    workplace_lng: float | None = None
     supervisor_name: str | None = None
     supervisor_email: str | None = None
     supervisor_phone: str | None = None
@@ -156,6 +158,11 @@ class AdminAttendanceItem(BaseModel):
     check_out: str | None = None
     status: str
     attendance_rate: float
+    work_mode: str = "offline"
+    location_verified: bool = False
+    check_in_lat: float | None = None
+    check_in_lng: float | None = None
+    company_name: str | None = None
 
 
 class AdminAttendanceListResponse(BaseModel):

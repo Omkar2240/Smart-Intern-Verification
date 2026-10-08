@@ -15,6 +15,8 @@ class InternshipBase(BaseModel):
     department: str | None = None
     internship_type: str = INTERNSHIP_TYPE_DEFAULT  # on_site, remote, hybrid
     location: str | None = None
+    workplace_lat: float | None = None
+    workplace_lng: float | None = None
     supervisor_name: str | None = None
     supervisor_email: str | None = None
     supervisor_phone: str | None = None
@@ -38,6 +40,8 @@ class InternshipUpdate(BaseModel):
     department: str | None = None
     internship_type: str | None = None
     location: str | None = None
+    workplace_lat: float | None = None
+    workplace_lng: float | None = None
     supervisor_name: str | None = None
     supervisor_email: str | None = None
     supervisor_phone: str | None = None
